@@ -194,7 +194,7 @@ module private PrinterImpl =
             let init = exprToSOpt "" init
             out "%s(%s;%s;%s)%s" "for" init cond inc (instrToSInd indent body)
         | While(cond, body) ->
-            out "%s(%s)%s" "while" (exprToS cond) (instrToSInd indent body)  
+            out "%s(%s)%s" "while" (exprToS cond) (instrToSInd indent body)
         | DoWhile(cond, body) ->
             out "%s%s%s(%s)" "do" "while" (exprToS cond |> sp) (instrToS indent body)
         | Keyword(k, None) -> out "%s;" k

@@ -19,7 +19,7 @@ let rename codes =
              yield c1.ToString() + c2.ToString()]
             |> List.sortByDescending (fun s -> count s.[0] + count s.[1])
         Array.ofList (oneLetterIdentifiers @ twoLettersIdentifiers)
-     
+
     Printer.printMode <- Printer.SingleChar
     let codes = Renamer.renameTopLevel codes Renamer.Unambiguous identTable
     identTable <- computeFrequencyIdentTable codes
@@ -36,7 +36,7 @@ let minifyFile filename =
         else (filename, (new StreamReader(filename)).ReadToEnd())
     vprintfn "Minifying '%s': Input file size is: %d" streamName (content.Length)
     let mutable codes = Parse.runParser streamName content
-    let shaderSize () = (Printer.quickPrint codes).Length 
+    let shaderSize () = (Printer.quickPrint codes).Length
     vprintfn "File parsed. Shader size is: %d" (shaderSize ())
     codes <- Rewriter.reorder codes
     codes <- Rewriter.apply codes
