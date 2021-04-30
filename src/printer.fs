@@ -1,34 +1,35 @@
 ﻿module Printer
 
+open System
 open Ast
-
-let mutable identTable: string[] = [||]
-let out a = sprintf a
+open Options.Globals
 
 // how to print variable names
-type printMode = FromTable | SingleChar | Nothing
+type PrintMode = FromTable | SingleChar | Nothing
 let mutable printMode = Nothing
 
 module private PrinterImpl =
 
-    let precedenceList = [
-        [","]
-        ["="; "+="; "-="; "*="; "/="; "%="; "<<="; ">>="; "&="; "^="; "|="] // precedence = 1
-        ["?:"]
-        ["||"]
-        ["^^"]
-        ["&&"]
-        ["|"]
-        ["^"]
-        ["&"]
-        ["=="; "!="]
-        ["<"; ">"; "<="; ">="]
-        ["<<"; ">>"]
-        ["+"; "-"]
-        ["*"; "/"; "%"]
-        // _++ is prefix and $++ is postfix
-        ["_++"; "_--"; "_+"; "_-"; "_~"; "_!"; "$++"; "$--"]
-        ["."]
+    let private out a = sprintf a
+
+    let private precedenceList = [
+      [","]
+      ["="; "+="; "-="; "*="; "/="; "%="; "<<="; ">>="; "&="; "^="; "|="] // precedence = 1
+      ["?:"]
+      ["||"]
+      ["^^"]
+      ["&&"]
+      ["|"]
+      ["^"]
+      ["&"]
+      ["=="; "!="]
+      ["<"; ">"; "<="; ">="]
+      ["<<"; ">>"]
+      ["+"; "-"]
+      ["*"; "/"; "%"]
+      // _++ is prefix and $++ is postfix
+      ["_++"; "_--"; "_+"; "_-"; "_~"; "_!"; "$++"; "$--"]
+      ["."]
     ]
 
     let precedence =
@@ -70,17 +71,19 @@ module private PrinterImpl =
         | FunCall(f, args) ->
             match f, args with
             | Var "?:", [a1; a2; a3] ->
-                let prec = precedence.["?:"]
-                let res = out "%s?%s:%s" (exprToSLevel prec a1) (exprToSLevel prec a2) (exprToSLevel prec a3)
-                if prec < level then out "(%s)" res else res
+                 let prec = precedence.["?:"]
+                 let res = out "%s?%s:%s" (exprToSLevel prec a1) (exprToSLevel prec a2) (exprToSLevel prec a3)
+                 if prec < level then out "(%s)" res else res
             | Var op, _ when System.Char.IsLetter op.[0] -> out "%s(%s)" (idToS op) (listToS exprToS "," args)
-            | Var op, _ when op.[0] = '0' -> out "%s(%s)" (idToS op) (listToS exprToS "," args)
+            // digit when renamed by RenameMode Unambiguous
+            | Var op, _ when System.Char.IsDigit op.[0] -> out "%s(%s)" (idToS op) (listToS exprToS "," args)
+            // _++ is prefix and $++ is postfix
             | Var op, [a1] when op.[0] = '$' -> out "%s%s" (exprToSLevel precedence.[op] a1) op.[1..]
             | Var op, [a1] -> out "%s%s" op (exprToSLevel precedence.["_" + op] a1)
             | Var op, [a1; a2] ->
                 let prec = precedence.[op]
                 let res =
-                    if prec = 1 then // "=", "+=", or other operative with right-associativity
+                    if prec = 1 then // "=", "+=", or other operator with right-associativity
                         out "%s%s%s" (exprToSLevel (prec+1) a1) op (exprToSLevel prec a2)
                     else
                         out "%s%s%s" (exprToSLevel prec a1) op (exprToSLevel (prec+1) a2)
@@ -104,13 +107,13 @@ module private PrinterImpl =
 
     let sp2 (s: string) (s2: string) =
         if s.Length > 0 && System.Char.IsLetterOrDigit(s.[s.Length-1]) &&
-            s2.Length > 0 && System.Char.IsLetterOrDigit(s2.[0]) then s + " " + s2
+           s2.Length > 0 && System.Char.IsLetterOrDigit(s2.[0]) then s + " " + s2
         else s + s2
 
     let backslashN() =
-        match targetOutput with
-        | Text -> "\n"
-        | Nasm -> "', 10, '"
+        match options.targetOutput with
+        | Options.Text -> "\n"
+        | Options.Nasm -> "', 10, '"
         | _ ->  "\\n"
 
     // Print HLSL semantics
@@ -150,24 +153,23 @@ module private PrinterImpl =
         else out "%s %s" (typeToS ty) (vars |> List.map out1 |> String.concat ",")
 
     let mutable ignoreFirstNewLine = true
-    let nl  =
-        let wh = String.replicate 80 " "
-        fun n ->
-            if ignoreFirstNewLine then
-                ignoreFirstNewLine <- false
-                ""
-            else
-                match targetOutput with
-                | Text -> ""
-                | CHeader | CList -> out "\"\r\n%s\"" wh.[0 .. 2 * n]
-                | JS -> out "\" +\r\n%s\"" wh.[0 .. 2 * n]
-                | Nasm -> out "'\r\n\tdb%s'" wh.[0 .. 2 * n]
+    let nl indent = // newline and optionally indent
+        if ignoreFirstNewLine then
+            ignoreFirstNewLine <- false
+            ""
+        else
+            let spaces = new string(' ', indent * 2 + 1)
+            match options.targetOutput with
+            | Options.Text -> ""
+            | Options.CHeader | Options.CList -> out "\"\r\n%s\"" spaces
+            | Options.JS -> out "\" +\r\n%s\"" spaces
+            | Options.Nasm -> out "'\r\n\tdb%s'" spaces
 
     let escape (s: string) =
-        match targetOutput with
-        | Text -> s
-        | CHeader | CList | JS -> s.Replace("\"", "\\\"").Replace("\n", "\\n")
-        | Nasm -> s.Replace("'", "\'").Replace("\n", "', 10, '")
+        match options.targetOutput with
+        | Options.Text -> s
+        | Options.CHeader | Options.CList | Options.JS -> s.Replace("\"", "\\\"").Replace("\n", "\\n")
+        | Options.Nasm -> s.Replace("'", "\'").Replace("\n", "', 10, '")
 
     let rec instrToS' indent = function
         | Block [] -> ";"
@@ -179,8 +181,8 @@ module private PrinterImpl =
         | Expr e -> out "%s;" (exprToS e)
         | If(cond, th, el) ->
             let el = match el with
-                     | None -> ""
-                     | Some el -> out "%s%s%s%s" (nl indent) "else" (nl (indent+1)) (instrToS' (indent+1) el |> sp)
+                        | None -> ""
+                        | Some el -> out "%s%s%s%s" (nl indent) "else" (nl (indent+1)) (instrToS' (indent+1) el |> sp)
             out "if(%s)%s%s" (exprToS cond) (instrToSInd indent th) el
         | ForD(init, cond, inc, body) ->
             let cond = exprToSOpt "" cond
@@ -192,7 +194,7 @@ module private PrinterImpl =
             let init = exprToSOpt "" init
             out "%s(%s;%s;%s)%s" "for" init cond inc (instrToSInd indent body)
         | While(cond, body) ->
-            out "%s(%s)%s" "while" (exprToS cond) (instrToSInd indent body)
+            out "%s(%s)%s" "while" (exprToS cond) (instrToSInd indent body)  
         | DoWhile(cond, body) ->
             out "%s%s%s(%s)" "do" "while" (exprToS cond |> sp) (instrToS indent body)
         | Keyword(k, None) -> out "%s;" k
@@ -230,19 +232,19 @@ module private PrinterImpl =
         ignoreFirstNewLine <- true
         let f x =
             let isMacro = match x with TLVerbatim s -> s <> "" && s.[0] = '#' | _ -> false
-            let needEndline = isMacro && not wasMacro
+            let needEndLine = isMacro && not wasMacro
             wasMacro <- isMacro
-            if needEndline then out "%s%s" (backslashN()) (topLevelToS x)
+            if needEndLine then out "%s%s" (backslashN()) (topLevelToS x)
             else topLevelToS x
 
         tl |> List.map f |> String.concat ""
 
     let quickPrint tl =
-        let out = Ast.targetOutput
-        Ast.targetOutput <- Text
+        let out = options.targetOutput
+        options.targetOutput <- Options.Text
         let str = print tl
-        Ast.targetOutput <- out
-        str.Length, str
+        options.targetOutput <- out
+        str
 
 let quickPrint = PrinterImpl.quickPrint
 let print = PrinterImpl.print
