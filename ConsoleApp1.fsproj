@@ -20,13 +20,13 @@
 
     <ItemGroup>
       <Reference Include="FParsec, Version=0.9.0.0, Culture=neutral, PublicKeyToken=null">
-        <HintPath>..\lib\FParsec.dll</HintPath>
+        <HintPath>lib\FParsec.dll</HintPath>
       </Reference>
       <Reference Include="FParsecCS, Version=0.9.0.0, Culture=neutral, PublicKeyToken=null">
-        <HintPath>..\lib\FParsecCS.dll</HintPath>
+        <HintPath>lib\FParsecCS.dll</HintPath>
       </Reference>
       <Reference Include="FSharp.PowerPack, Version=2.0.0.0, Culture=neutral, PublicKeyToken=a19089b1c74d0809">
-        <HintPath>..\lib\FSharp.PowerPack.dll</HintPath>
+        <HintPath>lib\FSharp.PowerPack.dll</HintPath>
       </Reference>
     </ItemGroup>
 
