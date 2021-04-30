@@ -2,12 +2,13 @@
 
 open System.Collections.Generic
 open Ast
+open Options.Globals
 
-type renameMode = Unambiguous | Frequency | Context
+type RenameMode = Unambiguous | Frequency | Context // Frequency is unused..? Unambiguous should be renamed "NoLetters"?  
 
-let mutable renameMode = Unambiguous
+let mutable private renameMode = Unambiguous
 
-let doNotOverloadList = Ast.noRenamingList
+let doNotOverloadList = options.noRenamingList
 
       (* Contextual renaming *)
 
@@ -24,8 +25,7 @@ let makeLetterIdent =
         string(chars.[first]) + string(chars.[second])
 
 let computeContextTable code =
-    let _, str = Printer.quickPrint code
-    str |> Seq.pairwise |> Seq.iter (fun (prev, next) ->
+    Printer.quickPrint code |> Seq.pairwise |> Seq.iter (fun (prev, next) ->
         match contextTable.TryFind (prev, next) with
         | Some n -> contextTable.[(prev, next)] <- n + 1
         | None -> contextTable.[(prev, next)] <- 1
@@ -71,18 +71,18 @@ let chooseIdent ident candidates =
         else
             snd best
 
-    let bestC = bestS.[0] // FIXME: doesn't work when ident have more than 1-char!
+    let bestC = bestS.[0] // TODO: doesn't work when ident have more than 1-char!
 
     // update table
     for c in allChars do
-      match contextTable.TryFind (c, ident), contextTable.TryFind (c, bestC) with
-      | None, _ -> ()
-      | Some n1, None -> contextTable.[(c, bestC)] <- n1
-      | Some n1, Some n2 -> contextTable.[(c, bestC)] <- n1 + n2
-      match contextTable.TryFind (ident, c), contextTable.TryFind (bestC, c) with
-      | None, _ -> ()
-      | Some n1, None -> contextTable.[(bestC, c)] <- n1
-      | Some n1, Some n2 -> contextTable.[(bestC, c)] <- n1 + n2
+        match contextTable.TryFind (c, ident), contextTable.TryFind (c, bestC) with
+        | None, _ -> ()
+        | Some n1, None -> contextTable.[(c, bestC)] <- n1 
+        | Some n1, Some n2 -> contextTable.[(c, bestC)] <- n1 + n2
+        match contextTable.TryFind (ident, c), contextTable.TryFind (bestC, c) with
+        | None, _ -> ()
+        | Some n1, None -> contextTable.[(bestC, c)] <- n1 
+        | Some n1, Some n2 -> contextTable.[(bestC, c)] <- n1 + n2
 
     bestS
 
@@ -98,9 +98,9 @@ type Env = {
     reusable: Ident list
 }
 
-let mutable numberOfUsedIdents = 0
+let mutable numberOfUsedIdents = 0 // TODO pourquoi une globale ? c'est à reset quand, dans renameTopLevel ? ça devrait être dans env ?
 
-let alwaysNewName env id =
+let alwaysNewName env id = // useful to find letter frequencies of non-identifiers
     numberOfUsedIdents <- numberOfUsedIdents + 1
     let newName = sprintf "%04d" numberOfUsedIdents
     let env = {env with map = Map.add id newName env.map; max = env.max + 1}
@@ -116,7 +116,7 @@ let optimizeFrequency env id =
     | e::l -> // reuse a variable name
         {env with map = Map.add id e env.map; reusable = l}, e
 
-// FIXME: handle 2-letter names
+// TODO: handle 2-letter names
 let optimizeContext env id =
     let cid = char (1000 + int id)
     let newName = chooseIdent cid env.reusable
@@ -130,7 +130,7 @@ let newId env id =
     | Context -> optimizeContext env id
 
 let renFunction env nbArgs id =
-    if List.exists ((=) id) Ast.noRenamingList then env, id // don't rename "main"
+    if List.exists ((=) id) options.noRenamingList then env, id // don't rename "main"
     else
         // we're looking for a function name, already used before,
         // but not with the same number of arg, and which is not in doNotOverloadList.
@@ -150,8 +150,8 @@ let renFunction env nbArgs id =
             env, newName
 
 let renFctName env (f: FunctionType) =
-    let ext = hlsl && f.semantics <> []
-    if (ext && preserveExternals) || preserveAllGlobals then
+    let ext = options.hlsl && f.semantics <> []
+    if (ext && options.preserveExternals) || options.preserveAllGlobals then
         env, f
     else
         let newEnv, newName = renFunction env (List.length f.args) f.fName
@@ -177,11 +177,11 @@ let renDecl isTopLevel env (ty:Type, vars) : Env * Decl =
         let env, newName =
             let ext =
                 match ty.typeQ with
-                | Some tyQ -> ["in"; "out"; "attribute"; "varying"; "uniform"]
-                             |> List.exists (fun s -> tyQ.Contains(s))
-                | None -> false
-            if isTopLevel && (ext || hlsl || Ast.preserveAllGlobals) then
-                if Ast.preserveExternals then
+                    | Some tyQ -> ["in"; "out"; "attribute"; "varying"; "uniform"]
+                                  |> List.exists (fun s -> tyQ.Contains(s))
+                    | None -> false
+            if isTopLevel && (ext || options.hlsl || options.preserveAllGlobals) then
+                if options.preserveExternals then
                     {env with reusable = List.filter ((<>)decl.name) env.reusable}, decl.name
                 else
                     let env, newName = newId env decl.name
@@ -196,8 +196,7 @@ let renDecl isTopLevel env (ty:Type, vars) : Env * Decl =
     let env, res = renList env aux vars
     env, (ty, res)
 
-// "Garbage collection": remove names that are not used in the block
-// so that we can reuse them.
+// "Garbage collection": remove names that are not used in the block so that we can reuse them.
 let garbage (env: Env) block =
     let d = HashSet()
     let collect mEnv = function
@@ -206,49 +205,49 @@ let garbage (env: Env) block =
             e
         | FunCall(Var id, li) as e ->
             match env.fct.TryFind id with
-            | Some m -> if not (m.ContainsKey li.Length) then d.Add id |> ignore
-            | None -> d.Add id |> ignore
+             | Some m -> if not (m.ContainsKey li.Length) then d.Add id |> ignore
+             | None -> d.Add id |> ignore
             e
         | e -> e
     mapInstr (mapEnv collect id) block |> ignore
     let set = HashSet(Seq.choose env.map.TryFind d)
     let map, reusable = Map.partition (fun _ id -> set.Contains id) env.map
-    let reusable = reusable |> Seq.filter (fun x -> not (List.exists ((=) x.Value) Ast.noRenamingList))
+    let reusable = reusable |> Seq.filter (fun x -> not (List.exists ((=) x.Value) options.noRenamingList))
     let merge = [for i in reusable -> i.Value] @ env.reusable |> Seq.distinct |> Seq.toList // |> List.sort
     {env with map=map; reusable=merge}
 
 let rec renInstr env =
     let renOpt o = Option.map (renExpr env) o
     function
-    | Expr e -> env, Expr (renExpr env e)
-    | Decl d ->
-        let env, res = renDecl false env d
-        env, Decl res
-    | Block b ->
-        let _, res = renList env renInstr b
-        env, Block res
-    | If(cond, th, el) ->
-        let _, th = renInstr env th
-        let el = Option.map (fun x -> snd (renInstr env x)) el
-        env, If(renExpr env cond, th, el)
-    | ForD(init, cond, inc, body) ->
-        let newEnv, init = renDecl false env init
-        let _, body = renInstr newEnv body
-        let cond = Option.map (renExpr newEnv) cond
-        let inc = Option.map (renExpr newEnv) inc
-        if hlsl then newEnv, ForD(init, renOpt cond, renOpt inc, body)
-        else env, ForD(init, renOpt cond, renOpt inc, body)
-    | ForE(init, cond, inc, body) ->
-        let _, body = renInstr env body
-        env, ForE(renOpt init, renOpt cond, renOpt inc, body)
-    | While(cond, body) ->
-        let _, body = renInstr env body
-        env, While(renExpr env cond, body)
-    | DoWhile(cond, body) ->
-        let _, body = renInstr env body
-        env, DoWhile(renExpr env cond, body)
-    | Keyword(k, e) -> env, Keyword(k, renOpt e)
-    | Verbatim _ as v -> env, v
+        | Expr e -> env, Expr (renExpr env e)
+        | Decl d ->
+            let env, res = renDecl false env d
+            env, Decl res
+        | Block b ->
+            let _, res = renList env renInstr b
+            env, Block res
+        | If(cond, th, el) ->
+            let _, th = renInstr env th
+            let el = Option.map (fun x -> snd (renInstr env x)) el
+            env, If(renExpr env cond, th, el)
+        | ForD(init, cond, inc, body) ->
+            let newEnv, init = renDecl false env init
+            let _, body = renInstr newEnv body
+            let cond = Option.map (renExpr newEnv) cond
+            let inc = Option.map (renExpr newEnv) inc
+            if options.hlsl then newEnv, ForD(init, renOpt cond, renOpt inc, body)
+            else env, ForD(init, renOpt cond, renOpt inc, body)
+        | ForE(init, cond, inc, body) ->
+            let _, body = renInstr env body
+            env, ForE(renOpt init, renOpt cond, renOpt inc, body)
+        | While(cond, body) ->
+            let _, body = renInstr env body
+            env, While(renExpr env cond, body)
+        | DoWhile(cond, body) ->
+            let _, body = renInstr env body
+            env, DoWhile(renExpr env cond, body)
+        | Keyword(k, e) -> env, Keyword(k, renOpt e)
+        | Verbatim _ as v -> env, v
 
 let rec renTopLevelName env = function
     | TLDecl d ->
@@ -260,12 +259,12 @@ let rec renTopLevelName env = function
     | e -> env, e
 
 let rec renTopLevelBody env = function
-    | Function(fct, body) ->
-        let env = garbage env body
-        let env, args = renList env (renDecl false) fct.args
-        let _env, body = renInstr env body
-        Function({fct with args=args}, body)
-    | e -> e
+  | Function(fct, body) ->
+      let env = garbage env body
+      let env, args = renList env (renDecl false) fct.args
+      let _env, body = renInstr env body
+      Function({fct with args=args}, body)
+  | e -> e
 
 // Remove the values from the env
 // so that the functions are not overloaded
@@ -276,11 +275,14 @@ let rec doNotOverload env = function
         let env = {env with map = Map.add name name env.map; reusable = re}
         doNotOverload env li
 
-let rec renTopLevel li mode =
+let mutable private forbiddenNames = [ "if"; "in"; "do" ]
+let addForbiddenName(s: string) = forbiddenNames <- s :: forbiddenNames
+
+let rec renameTopLevel li mode (identTable: string[]) =
     renameMode <- mode
-    let idents = Printer.identTable |> Array.toList
-              |> List.filter (fun x -> x.Length = 1)
-              |> List.filter (fun x -> not <| List.exists ((=) x) Ast.forbiddenNames)
+    let idents = identTable |> Array.toList
+                 |> List.filter (fun x -> x.Length = 1) // TODO: support 2-letter identifiers (see optimizeContext/chooseIdent)
+                 |> List.filter (fun x -> not <| List.exists ((=) x) forbiddenNames)
     // Rename top-level values first
     let env = {map = Map.empty ; max = 0 ; fct = Map.empty ; reusable = idents}
     let env = doNotOverload env doNotOverloadList
