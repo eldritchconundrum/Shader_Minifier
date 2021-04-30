@@ -23,7 +23,7 @@ type Options() =
             _canonicalFieldNames <- s
             true
     member val preserveExternals = false with get, set
-    member val preserveAllGlobals = false with get, set 
+    member val preserveAllGlobals = false with get, set
     member val reorderDeclarations = false with get, set
     member val reorderFunctions = false with get, set
     member val hlsl = false with get, set
@@ -34,12 +34,12 @@ type Options() =
 
 module Globals =
     let options = Options()
-    
+
     // enhance debugging on windows
     let myExit exitCode =
         if debugMode then System.Console.ReadLine() |> ignore
         exit exitCode
-        
+
     // like printfn when verbose option is set
     let vprintfn fmt = fprintfn (if options.verbose then stdout else TextWriter.Null) fmt
 open Globals
@@ -78,9 +78,9 @@ let parse () =
          "--smoothstep", ArgType.Unit (fun() -> options.smoothstepTrick<-true), "Use IQ's smoothstep trick"
          "--", ArgType.Rest options.filenames.Add, "Stop parsing command line"
         ] |> List.map ArgInfo
-    
+
     ArgParser.Parse(specs, options.filenames.Add)
-    
+
     if options.filenames.Count = 0 then
         printHeader()
         ArgParser.Usage(specs, usage = "Please give the shader files to compress on the command line.")

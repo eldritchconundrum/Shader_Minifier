@@ -4,7 +4,7 @@ open System.Collections.Generic
 open Ast
 open Options.Globals
 
-type RenameMode = Unambiguous | Frequency | Context // Frequency is unused..? Unambiguous should be renamed "NoLetters"?  
+type RenameMode = Unambiguous | Frequency | Context // Frequency is unused..? Unambiguous should be renamed "NoLetters"?
 
 let mutable private renameMode = Unambiguous
 
@@ -77,11 +77,11 @@ let chooseIdent ident candidates =
     for c in allChars do
         match contextTable.TryFind (c, ident), contextTable.TryFind (c, bestC) with
         | None, _ -> ()
-        | Some n1, None -> contextTable.[(c, bestC)] <- n1 
+        | Some n1, None -> contextTable.[(c, bestC)] <- n1
         | Some n1, Some n2 -> contextTable.[(c, bestC)] <- n1 + n2
         match contextTable.TryFind (ident, c), contextTable.TryFind (bestC, c) with
         | None, _ -> ()
-        | Some n1, None -> contextTable.[(bestC, c)] <- n1 
+        | Some n1, None -> contextTable.[(bestC, c)] <- n1
         | Some n1, Some n2 -> contextTable.[(bestC, c)] <- n1 + n2
 
     bestS
