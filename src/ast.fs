@@ -2,13 +2,6 @@
 
 open Options.Globals
 
-open System.IO
-
-let nullOut = new StreamWriter(Stream.Null) :> TextWriter
-
-let mutable forbiddenNames = [ "if"; "in"; "do" ]
-let addForbiddenName s = forbiddenNames <- s :: forbiddenNames
-
 type Ident = string
 
 type Expr =
@@ -142,8 +135,8 @@ let mapTopLevel env li =
     let _, res = li |> foldList env (fun env tl ->
         match tl with
         | TLDecl t ->
-            let env, res = mapDecl env t
-            env, TLDecl res
+                let env, res = mapDecl env t
+                env, TLDecl res
         | Function(fct, body) -> env, Function(fct, snd (mapInstr env body))
         | e -> env, e)
     res

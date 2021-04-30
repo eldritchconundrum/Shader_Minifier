@@ -10,7 +10,8 @@ let mutable private exportedValues = ([] : (string * string * string) list)
 let export ty name (newName:string) =
     if newName.[0] <> '0' then
         exportedValues <- exportedValues |> List.map (fun (ty2, name2, newName2 as arg) ->
-            if ty = ty2 && name = newName2 then ty, name2, newName
+            if ty = ty2 && name = newName2
+            then ty, name2, newName
             else arg
         )
     else
@@ -26,22 +27,22 @@ let private printHeader data asAList =
         if options.outputName = "" || options.outputName = "-" then "shader_code.h"
         else Path.GetFileName options.outputName
     let macroName = fileName.Replace(".", "_").ToUpper() + "_"
-
+    
     fprintfn out "/* File generated with Shader Minifier %s" Options.version
     fprintfn out " * http://www.ctrl-alt-test.fr"
     fprintfn out " */"
-
+    
     if not asAList then
         fprintfn out "#ifndef %s" macroName
         fprintfn out "# define %s" macroName
-
+    
     for ty, name, newName in List.sort exportedValues do
         // let newName = Printer.identTable.[int newName]
         if ty = "" then
             fprintfn out "# define VAR_%s \"%s\"" (name.ToUpper()) newName
         else
             fprintfn out "# define %c_%s \"%s\"" (System.Char.ToUpper ty.[0]) (name.ToUpper()) newName
-
+    
     fprintfn out ""
     for file : string, code in data do
         let name = (Path.GetFileName file).Replace(".", "_")
@@ -51,7 +52,7 @@ let private printHeader data asAList =
         else
             fprintfn out "const char *%s =\r\n \"%s\";" name (Printer.print code)
         fprintfn out ""
-
+    
     if not asAList then fprintfn out "#endif // %s" macroName
 
 let private printNoHeader data =
