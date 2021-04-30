@@ -3,34 +3,35 @@
 open System
 open System.Collections.Generic
 open Ast
+open Options.Globals
 
                                 (* ** Rewrite tricks ** *)
 
 
 let renameField field =
     let transform = function
-        | 'r' | 'x' | 's' -> fieldNames.[0]
-        | 'g' | 'y' | 't' -> fieldNames.[1]
-        | 'b' | 'z' | 'p' -> fieldNames.[2]
-        | 'a' | 'w' | 'q' -> fieldNames.[3]
+        | 'r' | 'x' | 's' -> options.canonicalFieldNames.[0]
+        | 'g' | 'y' | 't' -> options.canonicalFieldNames.[1]
+        | 'b' | 'z' | 'p' -> options.canonicalFieldNames.[2]
+        | 'a' | 'w' | 'q' -> options.canonicalFieldNames.[3]
         | c -> failwithf "Internal error: transform('%c')" c
     if Seq.forall (fun c -> Seq.exists ((=) c) "rgba") field ||
-        Seq.forall (fun c -> Seq.exists ((=) c) "xyzw") field ||
-        Seq.forall (fun c -> Seq.exists ((=) c) "stpq") field
+       Seq.forall (fun c -> Seq.exists ((=) c) "xyzw") field ||
+       Seq.forall (fun c -> Seq.exists ((=) c) "stpq") field
     then
-        field |> String.map transform
+      field |> String.map transform
     else field
 
 // Remove useless spaces in macros
-let stripSpaces str =
+let private stripSpaces str =
     let result = Text.StringBuilder()
 
-    let last = ref '\n'
+    let mutable last = '\n'
     let write c =
-        last := c
+        last <- c
         result.Append(c) |> ignore
     let isId c = Char.IsLetterOrDigit c || c = '_' || c = '('
-    // hack because we can't remove space in "#define foo (1+1)"
+       // hack because we can't remove space in "#define foo (1+1)"
 
     let mutable space = false
     let mutable macro = false
@@ -45,9 +46,9 @@ let stripSpaces str =
         else
             if not macro && c = '#' then
                 macro <- true
-                if !last <> '\n' then write '\n'
+                if last <> '\n' then write '\n'
 
-            if space && isId c && isId (!last) then
+            if space && isId c && isId last then
                 write ' '
             write c
             space <- false
@@ -55,14 +56,14 @@ let stripSpaces str =
     if macro then result.Append("\n") |> ignore
     result.ToString()
 
-let hasInlinePrefix (s:string) = s.StartsWith("i_")
-let declsNotToInline d = d |> List.filter (fun x -> not (hasInlinePrefix x.name))
+let private hasInlinePrefix (s:string) = s.StartsWith("i_")
+let private declsNotToInline d = d |> List.filter (fun x -> not (hasInlinePrefix x.name))
 
-let bool = function
+let private bool = function
     | true -> Var "true" // Int (1, "")
     | false -> Var "false" // Int (0, "")
 
-let rec expr env = function
+let rec private expr env = function
     | FunCall(Var "-", [Int (i1, su)]) -> Int (-i1, su)
     | FunCall(Var "-", [FunCall(Var "-", [e])]) -> e
     | FunCall(Var "+", [e]) -> e
@@ -71,9 +72,9 @@ let rec expr env = function
         FunCall(Var ",", [expr env (FunCall(Var ",", [e1; e2])); e3])
 
     | FunCall(Var "-", [x; Float (f, s)]) when f < 0. ->
-          FunCall(Var "+", [x; Float (-f, s)]) |> expr env
+        FunCall(Var "+", [x; Float (-f, s)]) |> expr env
     | FunCall(Var "-", [x; Int (i, s)]) when i < 0 ->
-          FunCall(Var "+", [x; Int (-i, s)]) |> expr env
+        FunCall(Var "+", [x; Int (-i, s)]) |> expr env
 
     // Boolean simplifications (let's ignore the suffix)
     | FunCall(Var "<",  [Int (i1, _); Int (i2, _)]) -> bool(i1 < i2)
@@ -122,13 +123,13 @@ let rec expr env = function
 
     // iq's smoothstep trick: http://www.pouet.net/topic.php?which=6751&page=1#c295695
     | FunCall(Var "smoothstep", [Float (0.,_); Float (1.,_); _]) as e -> e
-    | FunCall(Var "smoothstep", [a; b; x]) when Ast.smoothstepTrick ->
-        let sub1 = FunCall(Var "-", [x; a])
-        let sub2 = FunCall(Var "-", [b; a])
-        let div  = FunCall(Var "/", [sub1; sub2]) |> mapExpr env
-        FunCall(Var "smoothstep",  [Float (0.,""); Float (1.,""); div])
+    | FunCall(Var "smoothstep", [a; b; x]) when options.smoothstepTrick ->
+      let sub1 = FunCall(Var "-", [x; a])
+      let sub2 = FunCall(Var "-", [b; a])
+      let div  = FunCall(Var "/", [sub1; sub2]) |> mapExpr env
+      FunCall(Var "smoothstep",  [Float (0.,""); Float (1.,""); div])
 
-    | Dot(e, field) when fieldNames <> "" -> Dot(e, renameField field)
+    | Dot(e, field) when options.canonicalFieldNames <> "" -> Dot(e, renameField field)
 
     | Var s as e when hasInlinePrefix s ->
       match Map.tryFind s env.vars with
@@ -139,17 +140,17 @@ let rec expr env = function
 
 // Squeeze declarations: "float a=2.; float b;" => "float a=2.,b;"
 let rec squeezeDeclarations = function
-    |[]-> []
-    |Decl(ty1, li1) :: Decl(ty2, li2) :: l when ty1 = ty2 ->
-      squeezeDeclarations (Decl(ty1, li1 @ li2) :: l)
-    |e::l -> e :: squeezeDeclarations l
+    | []-> []
+    | Decl(ty1, li1) :: Decl(ty2, li2) :: l when ty1 = ty2 ->
+        squeezeDeclarations (Decl(ty1, li1 @ li2) :: l)
+    | e::l -> e :: squeezeDeclarations l
 
 // Squeeze top-level declarations, e.g. uniforms
 let rec squeezeTLDeclarations = function
-    |[]-> []
-    |TLDecl(ty1, li1) :: TLDecl(ty2, li2) :: l when ty1 = ty2 ->
-      squeezeTLDeclarations (TLDecl(ty1, li1 @ li2) :: l)
-    |e::l -> e :: squeezeTLDeclarations l
+    | []-> []
+    | TLDecl(ty1, li1) :: TLDecl(ty2, li2) :: l when ty1 = ty2 ->
+        squeezeTLDeclarations (TLDecl(ty1, li1 @ li2) :: l)
+    | e::l -> e :: squeezeTLDeclarations l
 
 let rwTypeSpec = function
     | TypeName n -> TypeName (stripSpaces n)
@@ -175,13 +176,13 @@ let instr = function
             | Keyword("return", Some _) -> true
             | _ -> false)
 
-        if not Ast.noSequence && canOptimize then
+        if not options.noSequence && canOptimize then
             let li = List.choose (function Expr e -> Some e | _ -> None) b
             match returnExp with
-            | None ->
+             | None ->
                 if li = [] then Block []
                 else Expr (List.reduce (fun acc x -> FunCall(Var ",", [acc;x])) li)
-            | Some e ->
+             | Some e ->
                let expr = List.reduce (fun acc x -> FunCall(Var ",", [acc;x])) (li@[e])
                Keyword("return", Some expr)
         else
@@ -197,7 +198,7 @@ let instr = function
     | e -> e
 
 let reorderTopLevel t =
-    if reorderDeclarations then
+    if options.reorderDeclarations then
         let externals, functions = List.partition (function TLDecl _ -> true | _ -> false) t
         List.sort externals @ functions
     else
@@ -208,9 +209,9 @@ let apply li =
     |> reorderTopLevel
     |> mapTopLevel (mapEnv expr instr)
     |> List.map (function
-        | TLDecl (ty, li) -> TLDecl (rwType ty, declsNotToInline li)
-        | TLVerbatim s -> TLVerbatim (stripSpaces s)
-        | e -> e
+          | TLDecl (ty, li) -> TLDecl (rwType ty, declsNotToInline li)
+          | TLVerbatim s -> TLVerbatim (stripSpaces s)
+          | e -> e
     )
     |> squeezeTLDeclarations
 
@@ -226,21 +227,21 @@ let rec findRemove callback = function
     | x :: l -> x :: findRemove callback l
 
 // slow, but who cares?
-let graphReorder deps =
-    let list = ref []
-    let lastName = ref ""
+let private graphReorder deps =
+    let mutable list = []
+    let mutable lastName = ""
 
     let rec loop deps =
-        let deps = findRemove (fun s x -> lastName := s; list := x :: !list) deps
-        let deps = deps |> List.map (fun (n, d, c) -> n, List.filter ((<>) !lastName) d, c)
+        let deps = findRemove (fun s x -> lastName <- s; list <- x :: list) deps
+        let deps = deps |> List.map (fun (n, d, c) -> n, List.filter ((<>) lastName) d, c)
         if deps <> [] then loop deps
 
     loop deps
-    !list |> List.rev
+    list |> List.rev
 
 
 // get the list of external values the block depends on
-let computeDependencies block =
+let private computeDependencies block =
     let d = HashSet()
     let collect mEnv = function
         | Var id as e ->
@@ -251,21 +252,20 @@ let computeDependencies block =
     d |> Seq.toList
 
 // This function assumes that functions are NOT overloaded
-let computeAllDependencies code =
+let private computeAllDependencies code =
     let fct = code |> List.choose (function
         | Function(fct, block) as f -> Some (fct.fName, block, f)
         | _ -> None)
     let deps = fct |> List.map (fun (name, block, f) ->
         let dep = computeDependencies block
-               |> List.filter (fun name -> List.exists (fun (x,_,_) -> name = x) fct)
+                  |> List.filter (fun name -> List.exists (fun (x,_,_) -> name = x) fct)
         name, dep, f)
     deps
 
 // reorder functions if there were forward declarations
 let reorder code =
-    if Ast.reorderFunctions then
-        if Ast.verbose then
-            printfn "Reordering functions because of forward declarations."
+    if options.reorderFunctions then
+        vprintfn "Reordering functions because of forward declarations."
         let order = code |> computeAllDependencies |> graphReorder
         let rest = code |> List.filter (function Function _ -> false | _ -> true)
         rest @ order

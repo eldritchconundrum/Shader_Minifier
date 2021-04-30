@@ -1,32 +1,6 @@
 ﻿module Ast
 
-open System.Collections.Generic
-open System.IO
-
-type targetOutput = Text | CHeader | CList | JS | Nasm
-
-let text() = Text
-
-let version = "1.1.6" // Shader Minifer version
-let debugMode = false
-
-let nullOut = new StreamWriter(Stream.Null) :> TextWriter
-
-let mutable outputName = "shader_code.h"
-let mutable targetOutput = CHeader
-let mutable verbose = false
-let mutable smoothstepTrick = false
-let mutable fieldNames = "xyzw"
-let mutable preserveExternals = false
-let mutable preserveAllGlobals = false
-let mutable reorderDeclarations = false
-let mutable reorderFunctions = false
-let mutable hlsl = false
-let mutable noSequence = false
-let mutable noRenaming = false
-let mutable noRenamingList = [ "main" ]
-let mutable forbiddenNames = [ "if"; "in"; "do" ]
-let addForbiddenName s = forbiddenNames <- s :: forbiddenNames
+open Options.Globals
 
 type Ident = string
 
@@ -98,12 +72,12 @@ type MapEnv = {
 let mapEnv fe fi = {fExpr = fe; fInstr = fi; vars = Map.empty}
 
 let foldList env fct li =
-    let env = ref env
+    let mutable env = env
     let res = li |> List.map (fun i ->
-        let x = fct !env i
-        env := fst x
+        let x = fct env i
+        env <- fst x
         snd x)
-    !env, res
+    env, res
 
 // Applies env.fExpr recursively on all nodes of an expression.
 let rec mapExpr env = function
@@ -145,7 +119,7 @@ let rec mapInstr env i =
             let env', decl = mapDecl env init
             let res = ForD (decl, Option.map (mapExpr env') cond,
                             Option.map (mapExpr env') inc, snd (mapInstr env' body))
-            if hlsl then env', res
+            if options.hlsl then env', res
             else env, res
         | ForE(init, cond, inc, body) ->
             let res = ForE (Option.map (mapExpr env) init, Option.map (mapExpr env) cond,
@@ -161,8 +135,8 @@ let mapTopLevel env li =
     let _, res = li |> foldList env (fun env tl ->
         match tl with
         | TLDecl t ->
-            let env, res = mapDecl env t
-            env, TLDecl res
+                let env, res = mapDecl env t
+                env, TLDecl res
         | Function(fct, body) -> env, Function(fct, snd (mapInstr env body))
         | e -> env, e)
     res

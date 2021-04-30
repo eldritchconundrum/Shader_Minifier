@@ -1,146 +1,166 @@
-﻿module main
+﻿module Main
 
 open System
 open System.IO
-open Microsoft.FSharp.Text
+open Options.Globals
 
-// Compute table of variables names, based on frequency
-let computeFrequencyIdentTable li =
-    let _, str = Printer.quickPrint li
-
-    let stat = Seq.countBy id str |> dict
-    let get c = let ok, res = stat.TryGetValue(c) in if ok then res else 0
-    let letters = ['a'..'z']@['A'..'Z']
-
-    // First, use most frequent letters
-    let table = letters |> List.sortBy get |> List.rev |> List.map string
-
-    // Then, generate identifiers with 2 letters
-    let score (s:string) = - (get s.[0] + get s.[1])
-    let table2 = [for c1 in letters do for c2 in letters do yield c1.ToString() + c2.ToString()]
-              |> List.sortBy score
-
-    Printer.identTable <- Array.ofList (table @ table2)
-
-let nullOut = new StreamWriter(Stream.Null) :> TextWriter
-
-// like printf when verbose option is set
-let vprintf fmt =
-    let out = if Ast.verbose then stdout else Ast.nullOut
-    fprintf out fmt
-
-let printSize code =
-    if Ast.verbose then
-        let n, _ = Printer.quickPrint code
-        printfn "Shader size is: %d" n
-
-let rename code =
+let mutable identTable: string[] = [||] // carried on from one file to the next? is this on purpose?
+let rename codes =
+    // Compute the list of possible 1-letter and 2-letter variables names, ordered by descending letter frequency
+    let computeFrequencyIdentTable codes =
+        let str = Printer.quickPrint codes
+        let charCounts = Seq.countBy id str |> dict
+        let count c = let ok, res = charCounts.TryGetValue(c) in if ok then res else 0
+        let letters = ['a'..'z']@['A'..'Z']
+        let oneLetterIdentifiers = letters |> List.sortByDescending count |> List.map string
+        let twoLettersIdentifiers =
+            [for c1 in letters do
+             for c2 in letters do
+             yield c1.ToString() + c2.ToString()]
+            |> List.sortByDescending (fun s -> count s.[0] + count s.[1])
+        Array.ofList (oneLetterIdentifiers @ twoLettersIdentifiers)
+     
     Printer.printMode <- Printer.SingleChar
-    let code = Renamer.renTopLevel code Renamer.Unambiguous
-    computeFrequencyIdentTable code
-    Renamer.computeContextTable code
+    let codes = Renamer.renameTopLevel codes Renamer.Unambiguous identTable
+    identTable <- computeFrequencyIdentTable codes
+    Renamer.computeContextTable codes
 
     Printer.printMode <- Printer.FromTable
-    let code = Renamer.renTopLevel code Renamer.Context
-    vprintf "%d identifiers renamed. " Renamer.numberOfUsedIdents
-    printSize code
-    code
+    let codes = Renamer.renameTopLevel codes Renamer.Context identTable
+    codes
 
-let readFile file =
-    let stream =
-        if file = "" then new StreamReader(Console.OpenStandardInput())
-        else new StreamReader(file)
-    stream.ReadToEnd()
+let minifyFile filename =
+    let (streamName, content) =
+        if filename = ""
+        then ("stdin", (new StreamReader(Console.OpenStandardInput())).ReadToEnd())
+        else (filename, (new StreamReader(filename)).ReadToEnd())
+    vprintfn "Minifying '%s': Input file size is: %d" streamName (content.Length)
+    let mutable codes = Parse.runParser streamName content
+    let shaderSize () = (Printer.quickPrint codes).Length 
+    vprintfn "File parsed. Shader size is: %d" (shaderSize ())
+    codes <- Rewriter.reorder codes
+    codes <- Rewriter.apply codes
+    vprintfn "Rewrite tricks applied. Shader size is: %d" (shaderSize ())
+    if not options.noRenaming then
+        codes <- rename codes
+        vprintfn "%d identifiers renamed. Shader size is: %d" Renamer.numberOfUsedIdents (shaderSize ())
+    vprintfn "Minification of '%s' finished." streamName
+    codes
 
-let minify(filename, content: string) =
-    vprintf "Input file size is: %d\n" (content.Length)
-    let code = Parse.runParser filename content
-    vprintf "File parsed. "; printSize code
-
-    let code = Rewriter.reorder code
-
-    let code = Rewriter.apply code
-    vprintf "Rewrite tricks applied. "; printSize code
-
-    let code =
-        if Ast.noRenaming then code
-        else rename code
-
-    vprintf "Minification of '%s' finished.\n" filename
-    code
-
-let minifyFile file =
-    let content = readFile file
-    let filename = if file = "" then "stdin" else file
-    minify(filename, content)
-
-let run files =
-    let fail (exn:exn) s =
-          printfn "%s" s;
-          printfn "%s" exn.StackTrace
-          1
+let () = // parse argv, then process filenames
     try
-        let codes = Array.map minifyFile files
-        CGen.print (Array.zip files codes) Ast.targetOutput
-        0
-    with
-        | Failure s as exn -> fail exn s
-        | exn -> fail exn exn.Message
-
-let printHeader () =
-    printfn "Shader Minifier %s - https://github.com/laurentlb/Shader_Minifier" Ast.version
-    printfn ""
-
-let () =
-    let files = ref []
-    let setFile s = files := s :: !files
-
-    let setFieldNames s =
-        if s = "rgba" || s = "xyzw" || s = "stpq" || s = "" then
-            Ast.fieldNames <- s
+        if System.Diagnostics.Debugger.IsAttached then
+            options.outputName <- ""
+            options.preserveExternals <- true
+            let filenames = [|
+                "tests/real/chocolux.frag"
+                "tests/real/clod.frag"
+                "tests/real/deform.frag"
+                "tests/real/disco.frag"
+                "tests/real/extatique/blit2.frag"
+                "tests/real/extatique/blitcorner.frag"
+                "tests/real/extatique/blit.frag"
+                "tests/real/extatique/blitgirl.frag"
+                "tests/real/extatique/blitsquare.frag"
+                "tests/real/extatique/distort.frag"
+                "tests/real/extatique/final.frag"
+                "tests/real/extatique/font.frag"
+                "tests/real/extatique/glow.frag"
+                "tests/real/extatique/graindo12.frag"
+                "tests/real/extatique/lambert2.frag"
+                "tests/real/extatique/lambert.frag"
+                "tests/real/extatique/loading.frag"
+                "tests/real/extatique/log.frag"
+                "tests/real/extatique/particle.frag"
+                "tests/real/extatique/progress.frag"
+                "tests/real/extatique/put.frag"
+                "tests/real/extatique/raymarch.frag"
+                "tests/real/extatique/scene30.frag"
+                "tests/real/extatique/scene40.frag"
+                "tests/real/extatique/scene45.frag"
+                "tests/real/extatique/skybox2.frag"
+                "tests/real/extatique/skybox.frag"
+                "tests/real/extatique/snake.frag"
+                "tests/real/extatique/water.frag"
+                "tests/real/fly.frag"
+                "tests/real/gfx monitor/distancefieldRaytrace.frag"
+                "tests/real/gfx monitor/gradation.frag"
+                "tests/real/heart.frag"
+                "tests/real/julia.frag"
+                "tests/real/kaleidoscope.frag"
+                "tests/real/kinder_painter.frag"
+                "tests/real/leizex.frag"
+                "tests/real/lunaquatic.frag"
+                "tests/real/mandelbulb.frag"
+                "tests/real/mandel.frag"
+                "tests/real/metatunnel.frag"
+                "tests/real/monjori.frag"
+                "tests/real/motion_blur.frag"
+                "tests/real/multitexture.frag"
+                "tests/real/postprocessing.frag"
+                "tests/real/quaternion.frag"
+                "tests/real/radial_blur.frag"
+                "tests/real/relief_tunnel.frag"
+                "tests/real/slisesix.frag"
+                "tests/real/square_tunnel.frag"
+                "tests/real/star.frag"
+                "tests/real/sult.frag"
+                "tests/real/to_the_road_of_ribbon.frag"
+                "tests/real/tunnel.frag"
+                "tests/real/twist.frag"
+                "tests/real/z_invert.frag"
+                "tests/unit/1.simple.frag"
+                "tests/unit/2.simple.frag"
+                "tests/unit/2.simple.opt.frag"
+                "tests/unit/array.frag"
+                "tests/unit/blocks.frag"
+                "tests/unit/commas.frag"
+                "tests/unit/empty_block.frag"
+                "tests/unit/float.frag"
+                "tests/unit/hexa.frag"
+                "tests/unit/inline.frag"
+                "tests/unit/keyword_prefix.frag"
+                "tests/unit/numbers.frag"
+                "tests/unit/overload.frag"
+                "tests/unit/precedence.frag"
+                "tests/unit/rename_conflict.frag"
+                "tests/unit/simple.frag"
+                "tests/unit/smoothstep.frag"
+                "tests/unit/suffix.frag"
+                "tests/real/the orange guy/ball_pixel.glsl"
+                "tests/real/the orange guy/ball_vertex.glsl"
+                "tests/real/the orange guy/bloom2_pixel.glsl"
+                "tests/real/the orange guy/bloom2_vertex.glsl"
+                "tests/real/the orange guy/bloom_pixel.glsl"
+                "tests/real/the orange guy/bloom_vertex.glsl"
+                "tests/real/the orange guy/dfc_pixel.glsl"
+                "tests/real/the orange guy/dfc_vertex.glsl"
+                "tests/real/the orange guy/final_pixel.glsl"
+                "tests/real/the orange guy/final_vertex.glsl"
+                "tests/real/the orange guy/font_pixel.glsl"
+                "tests/real/the orange guy/font_vertex.glsl"
+                "tests/real/the orange guy/logofinal_pixel.glsl"
+                "tests/real/the orange guy/logofinal_vertex.glsl"
+                "tests/real/the orange guy/orange_pixel.glsl"
+                "tests/real/the orange guy/orange_vertex.glsl"
+                "tests/real/the orange guy/particle_pixel.glsl"
+                "tests/real/the orange guy/particle_vertex.glsl"
+                "tests/real/the orange guy/put_pixel.glsl"
+                "tests/real/the orange guy/puttexture_pixel.glsl"
+                "tests/real/the orange guy/puttexture_vertex.glsl"
+                "tests/real/the orange guy/put_vertex.glsl"
+                "tests/real/the orange guy/scene10_vertex.glsl"
+                "tests/real/the orange guy/tonemapping_pixel.glsl"
+                "tests/real/the orange guy/tonemapping_vertex.glsl"
+                "tests/real/the orange guy/tunnel_pixel.glsl"
+                "tests/real/the orange guy/tunnel_vertex.glsl"
+            |]
+            options.filenames.AddRange(Array.map (fun s -> "../../../" + s) filenames)
         else
-            printfn "'%s' is not a valid value for field-names" s
-            printfn "You must use 'rgba', 'xyzw', or 'stpq'."
-
-    let noRenamingFct (s:string) = Ast.noRenamingList <- [for i in s.Split([|','|]) -> i.Trim()]
-
-    let setFormat = function
-        | "c-variables" -> Ast.targetOutput <- Ast.CHeader
-        | "js" -> Ast.targetOutput <- Ast.JS
-        | "c-array" -> Ast.targetOutput <- Ast.CList
-        | "none" -> Ast.targetOutput <- Ast.Text
-        | "nasm" -> Ast.targetOutput <- Ast.Nasm
-        | s -> printfn "'%s' is not a valid format" s
-
-    let specs =
-        ["-o", ArgType.String (fun s -> Ast.outputName <- s), "Set the output filename (default is shader_code.h)"
-         "-v", ArgType.Unit (fun() -> Ast.verbose<-true), "Verbose, display additional information"
-         "--hlsl", ArgType.Unit (fun() -> Ast.hlsl<-true), "Use HLSL (default is GLSL)"
-         "--format", ArgType.String setFormat, "Can be: c-variables (default), c-array, js, nasm, or none"
-         "--field-names", ArgType.String setFieldNames, "Choose the field names for vectors: 'rgba', 'xyzw', or 'stpq'"
-         "--preserve-externals", ArgType.Unit (fun() -> Ast.preserveExternals<-true), "Do not rename external values (e.g. uniform)"
-         "--preserve-all-globals", ArgType.Unit (fun() -> Ast.preserveAllGlobals<-true; Ast.preserveExternals<-true), "Do not rename functions and global variables"
-         "--no-renaming", ArgType.Unit (fun() -> Ast.noRenaming<-true), "Do not rename anything"
-         "--no-renaming-list", ArgType.String noRenamingFct, "Comma-separated list of functions to preserve"
-         "--no-sequence", ArgType.Unit (fun() -> Ast.noSequence<-true), "Do not use the comma operator trick"
-         "--smoothstep", ArgType.Unit (fun() -> Ast.smoothstepTrick<-true), "Use IQ's smoothstep trick"
-         "--", ArgType.Rest setFile, "Stop parsing command line"
-        ] |> List.map ArgInfo
-
-    ArgParser.Parse(specs, setFile)
-    files := List.rev !files
-
-    let myExit n =
-        if Ast.debugMode then System.Console.ReadLine() |> ignore
-        exit n
-
-    if !files = [] then
-        printHeader()
-        ArgParser.Usage(specs, usage="Please give the shader files to compress on the command line.")
-        myExit 1
-    elif List.length !files > 1 && not Ast.preserveExternals then
-        printfn "When compressing multiple files, you must use the --preserve-externals option."
-        myExit 1
-    else
-        if Ast.verbose then printHeader()
-        myExit (run (Array.ofList !files))
+            Options.parse ()
+        // first minify every file, then print minified files
+        let codes = Array.map minifyFile (options.filenames.ToArray())
+        CGen.print (Array.zip (options.filenames.ToArray()) codes) options.targetOutput
+        myExit 0
+    with e -> printfn "%s" (e.ToString())
+              myExit 1
