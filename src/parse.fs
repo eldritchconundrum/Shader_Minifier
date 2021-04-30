@@ -8,6 +8,7 @@ module private ParseImpl =
     open FParsec.Primitives
     open FParsec.CharParsers
     open FParsec
+    open Options.Globals
 
     let private commentLine = parse {
         do! skipString "//" // .>> noneOf "[")) // (pchar '[')) // <?> "comment, not verbatim code"
@@ -54,7 +55,6 @@ module private ParseImpl =
             if ok then Ast.Int (res, "")
             else Ast.Float (try float s, "" with _ -> failwith ("invalid number: " + s))
         regex r .>> ws |>> conv
-
     let anyNumber =
         let n = (hexa <|> octal <|> number) <?> "number"
         let suffix = ["f"; "F"; "LF"; "lf"; "u"; "U"; "l"; "L"; "h"; "H"]
@@ -148,7 +148,7 @@ module private ParseImpl =
     // A type block, like struct or interface blocks
     let blockSpecifier prefix =
 
-        // Restriction on field names
+      // Restriction on field names
         let check ((_,l) as arg : Ast.Decl) =
             List.iter (fun (decl:Ast.DeclElt) ->
                 if decl.name <> Rewriter.renameField decl.name then
@@ -167,7 +167,7 @@ module private ParseImpl =
     }
 
     let structDecl =
-        let semi = if Ast.hlsl then opt (ch ';') |>> ignore else ch ';'
+        let semi = if options.hlsl then opt (ch ';') |>> ignore else ch ';'
         (structSpecifier .>> semi) |>> Ast.TypeDecl
 
     // eg. "const out int", "uniform float"
@@ -206,7 +206,7 @@ module private ParseImpl =
         pipe3 qualifier typeSpec generic (fun tyQ name _ -> Ast.makeType name tyQ)
 
     let specifiedType =
-        if Ast.hlsl then specifiedTypeHLSL else specifiedTypeGLSL
+        if options.hlsl then specifiedTypeHLSL else specifiedTypeGLSL
 
     // For HLSL, e.g. ": color"
     let semantics =
@@ -233,9 +233,9 @@ module private ParseImpl =
         let! sem = semantics
         let s = sem |> List.map (fun s -> ":" + Printer.exprToS s) |> String.concat ""
         let! ret = blockSpecifier (Printer.typeToS ty + s)
-                      |>> Ast.TypeDecl
+                   |>> Ast.TypeDecl
         // semi-colon seems to be optional in hlsl
-        do! if Ast.hlsl then opt (ch ';') |>> ignore else ch ';'
+        do! if options.hlsl then opt (ch ';') |>> ignore else ch ';'
         return ret
     }
 
@@ -271,7 +271,7 @@ module private ParseImpl =
         let ident = manyChars (pchar '_' <|> asciiLetter <|> digit)
         // parse the #define macros to get the macro name
         let define = pipe2 (keyword "define" >>. ident) line
-                       (fun id line -> Ast.addForbiddenName id; "define " + id + line)
+                      (fun id line -> Renamer.addForbiddenName id; "define " + id + line)
         pchar '#' >>. (define <|> line) .>> ws |>> (fun s -> "#" + s)
 
     let verbatim = parse {
@@ -283,7 +283,7 @@ module private ParseImpl =
 
     // HLSL attribute, eg. [maxvertexcount(12)]
     let attribute =
-        if Ast.hlsl then
+        if options.hlsl then
             ch '[' >>. manyCharsTill anyChar (ch ']')
                 |>> (function s -> "[" + s + "]")
         else
@@ -291,9 +291,11 @@ module private ParseImpl =
 
     let special =
         let key =
-            choice [keyword "break"; keyword "continue"; keyword "discard"]
-              |>> (fun k -> Ast.Keyword(k, None))
-
+            choice [
+                keyword "break"
+                keyword "continue"
+                keyword "discard"
+            ] |>> (fun k -> Ast.Keyword(k, None))
         let ret = pipe2 (keyword "return") (opt expr) (fun k e -> Ast.Keyword(k, e))
         (key <|> ret) .>> ch ';'
 
@@ -324,21 +326,21 @@ module private ParseImpl =
     let toplevel =
         let decl = declaration .>> ch ';'
         let item = choice [
-                    macro |>> Ast.TLVerbatim
-                    verbatim |>> Ast.TLVerbatim
-                    attribute |>> Ast.TLVerbatim
-                    attempt decl |>> Ast.TLDecl
-                    structDecl
-                    attempt interfaceBlock
-                    pfunction
+            macro |>> Ast.TLVerbatim
+            verbatim |>> Ast.TLVerbatim
+            attribute |>> Ast.TLVerbatim
+            attempt decl |>> Ast.TLDecl
+            structDecl
+            attempt interfaceBlock
+            pfunction
         ]
-        let forwardDecl = functionHeader .>> ch ';' |>> (fun _ -> Ast.reorderFunctions <- true)
+        let forwardDecl = functionHeader .>> ch ';' |>> (fun _ -> options.reorderFunctions <- true)
         many ((attempt forwardDecl|>>fun _ -> None) <|> (item|>>Some)) |>> List.choose id // FIXME: use skip?
 
     let parse = ws >>. toplevel .>> eof
 
-    let runParser filename content =
-        let res = runParserOnString parse () filename content
+    let runParser streamName content =
+        let res = runParserOnString parse () streamName content
         match res with
         | Success(r,_,_) -> r
         | Failure(str, _, _) -> failwithf "Parse error: %s" str
