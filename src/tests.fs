@@ -6,7 +6,7 @@ open System.Diagnostics
 
 let binaryFilename = "bin/Debug/net5.0/ConsoleApp1.dll"
 
-let testFiles = Directory.GetFiles("tests/", "*.*", SearchOption.AllDirectories)
+let testFiles = Directory.GetFiles("tests-output/", "*.*", SearchOption.AllDirectories)
                 |> Array.filter (fun f -> not(f.EndsWith(".expected")))
                 |> Array.filter (fun f -> not(f.EndsWith(".actual")))
                 |> Array.filter (fun f -> not(f.EndsWith(".unsupported")))
@@ -35,12 +35,13 @@ let () =
     printfn "%i tests run in %i seconds, %i failed." testFiles.Length (int(stopwatch.Elapsed.TotalSeconds)) failedTestCount
     ()
 
+// rm -rf tests-output/ && cp -r tests tests-output
 // time dotnet fsi --quiet --exec src/tests.fs && zsh -c 'for i in **/*.expected; do echo \# diff "$i" "${i/.expected/.actual/}"; diff "$i" <(sed s/_ACTUAL_/_EXPECTED_/ "${i/.expected/.actual}") || echo "FAILED: ${i/.expected/}"; done'
 // zsh -c 'echo rm **/*.actual'
-// attention, ne gère pas "--hlsl" : zsh -c 'rm **/*.expected; for i in tests/**/*.*; do echo "$i"; dotnet bin/Debug/net5.0/ConsoleApp1.dll "$i" -o "$i.expected"; done'
+// attention, ne gère pas "--hlsl" : zsh -c 'rm **/*.expected; for i in tests-output/**/*.*; do echo "$i"; dotnet bin/Debug/net5.0/ConsoleApp1.dll "$i" -o "$i.expected"; done'
 
 // list of tests using --smoothstep
 //      unit/smoothstep.frag real/slisesix.frag real/relief_tunnel.frag real/elevated.hlsl
 //      real/radial_blur.frag real/postprocessing.frag real/lunaquatic.frag real/extatique/progress.frag real/extatique/blitsquare.frag real/extatique/blitgirl.frag
 
-// zsh -c './minifier.sh --preserve-externals -o "" tests/**/*.{frag,glsl}'
+// zsh -c './minifier.sh --preserve-externals -o "" tests-output/**/*.{frag,glsl}'
