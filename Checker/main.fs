@@ -1,7 +1,9 @@
-﻿open OpenTK.Graphics.OpenGL
+﻿open System.Runtime.InteropServices
+open OpenTK.Graphics.OpenGL
 open System
 open System.Diagnostics
 open System.IO
+open System.Linq
 
 let initOpenTK () =
     // OpenTK requires a GameWindow
@@ -55,18 +57,20 @@ let testPerformance files =
 [<EntryPoint>]
 let main argv =
     initOpenTK()
-    Options.Globals.options.init([|"--format"; "text"; "fake.frag"|]) |> ignore
+    assert Options.Globals.options.init([|"--format"; "text"; "fake.frag"|])
     let mutable failures = 0
-    let unitTests = Directory.GetFiles("tests/unit", "*.frag")
-    let realTests = Directory.GetFiles("tests/real", "*.frag");
-    for f in unitTests do
+    let unitTests = Directory.GetFiles("tests/unit", "*.frag", SearchOption.AllDirectories)
+    let realTests = Directory.GetFiles("tests/real", "*.frag", SearchOption.AllDirectories)
+    let allTests = Seq.concat [realTests; unitTests] |> Seq.toArray
+    for f in allTests do
         if not (testMinifyAndCompile f) then
             failures <- failures + 1
-    testPerformance (Seq.concat [realTests; unitTests] |> Seq.toArray)
+    testPerformance allTests
     if failures = 0 then
         printfn "All good."
     else
         printfn "%d failures." failures
-    
-    System.Console.ReadLine() |> ignore
+
+    if RuntimeInformation.IsOSPlatform(OSPlatform.Windows) then
+        System.Console.ReadLine() |> ignore
     if failures = 0 then 0 else 1

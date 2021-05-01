@@ -11,7 +11,8 @@ let mutable private exportedValues = ([] : (string * string * string) list)
 let export ty name (newName:string) =
     if newName.[0] <> '0' then
         exportedValues <- exportedValues |> List.map (fun (ty2, name2, newName2 as arg) ->
-            if ty = ty2 && name = newName2 then ty, name2, newName
+            if ty = ty2 && name = newName2
+            then ty, name2, newName
             else arg
         )
     else

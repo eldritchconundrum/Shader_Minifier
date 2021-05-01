@@ -1,4 +1,4 @@
-﻿module Options
+module Options
 
 open System.Collections.Generic
 open System.IO
@@ -20,7 +20,7 @@ type FieldSet =
     | RGBA
     | XYZW
     | STPQ
-    
+
 type CliArguments =
     | [<CustomCommandLine("-o")>] OutputName of string
     | [<CustomCommandLine("-v")>] Verbose
@@ -112,6 +112,10 @@ type Options() =
 
 module Globals =
     let options = Options()
-
-    // like printfn when verbose option is set
+    
+    // like printf when verbose option is set
     let vprintf fmt = fprintf (if options.verbose then stdout else TextWriter.Null) fmt
+    
+    // like printfn when verbose option is set
+    let vprintfn fmt = fprintfn (if options.verbose then stdout else TextWriter.Null) fmt
+open Globals

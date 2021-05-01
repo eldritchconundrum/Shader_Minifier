@@ -138,5 +138,6 @@ let mapTopLevel env li =
             let env, res = mapDecl env t
             env, TLDecl res
         | Function(fct, body) -> env, Function(fct, snd (mapInstr env body))
-        | e -> env, e)
+        | e -> env, e
+    )
     res
