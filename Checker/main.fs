@@ -2,6 +2,7 @@
 open System
 open System.Diagnostics
 open System.IO
+open System.Linq
 
 let initOpenTK () =
     // OpenTK requires a GameWindow
@@ -56,16 +57,15 @@ let performanceCheck files =
 let main argv =
     initOpenTK()
     let mutable failures = 0
-    let unitTests = Directory.GetFiles("tests/unit", "*.frag")
-    let realTests = Directory.GetFiles("tests/real", "*.frag");
-    for f in unitTests do
+    let inputs = Directory.GetFiles("tests/unit", "*.frag")
+    //let inputs = Directory.GetFiles("tests/", "*.frag", SearchOption.AllDirectories)
+    //let inputs = inputs.Concat(Directory.GetFiles("tests/", "*.glsl", SearchOption.AllDirectories)).ToArray()
+    for f in inputs do
         if not (check f) then
             failures <- failures + 1
-    performanceCheck (Seq.concat [realTests; unitTests] |> Seq.toArray)
     if failures = 0 then
         printfn "All good."
     else
         printfn "%d failures." failures
-    
-    System.Console.ReadLine() |> ignore
+    //System.Console.ReadLine() |> ignore
     if failures = 0 then 0 else 1
