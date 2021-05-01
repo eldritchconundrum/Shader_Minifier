@@ -11,6 +11,7 @@ The code is tested with:
 
 * F# 4.0 on Windows (Visual Studio Community 2015)
 * F# 3.0 on Linux and Mono 3.2.8
+* F# on Linux with dotnet 5
 
 Slightly outdated user manual:
   http://www.ctrl-alt-test.fr/?page_id=7

@@ -1,4 +1,4 @@
-﻿module Options
+module Options
 
 open System.Collections.Generic
 open System.IO
@@ -35,32 +35,35 @@ type Options() =
 module Globals =
     let options = Options()
 
-    // like printfn when verbose option is set
-    let vprintf fmt = fprintf (if options.verbose then stdout else TextWriter.Null) fmt
+    // enhance debugging on windows
+    let myExit exitCode =
+        if debugMode then System.Console.ReadLine() |> ignore
+        exit exitCode
 
+    // like printfn when verbose option is set
+    let vprintfn fmt = fprintfn (if options.verbose then stdout else TextWriter.Null) fmt
 open Globals
 
 let parse () =
     let printHeader () =
         printfn "Shader Minifier %s - https://github.com/laurentlb/Shader_Minifier" version
         printfn ""
-
-    let setFieldNames s =
-        if not (options.trySetCanonicalFieldNames s) then
-            printfn "'%s' is not a valid value for field-names" s
-            printfn "You must use 'rgba', 'xyzw', or 'stpq'."
-
-    let noRenamingFct (s:string) = options.noRenamingList <- [for i in s.Split([|','|]) -> i.Trim()]
-
-    let setFormat = function
-        | "c-variables" -> options.targetOutput <- CHeader
-        | "js" -> options.targetOutput <- JS
-        | "c-array" -> options.targetOutput <- CList
-        | "none" -> options.targetOutput <- Text
-        | "nasm" -> options.targetOutput <- Nasm
-        | s -> printfn "'%s' is not a valid format" s
-
     let specs =
+        let setFieldNames s =
+            if not (options.trySetCanonicalFieldNames s) then
+                printfn "'%s' is not a valid value for field-names" s
+                printfn "You must use 'rgba', 'xyzw', or 'stpq'."
+                //myExit 1
+        let noRenamingFct (s:string) = options.noRenamingList <- [for i in s.Split([|','|]) -> i.Trim()]
+        let setFormat = fun s ->
+            options.targetOutput <-
+                match s with
+                | "c-variables" -> CHeader
+                | "js" -> JS
+                | "c-array" -> CList
+                | "none" -> Text
+                | "nasm" -> Nasm
+                | s -> printfn "'%s' is not a valid format" s; options.targetOutput
         ["-o", ArgType.String (fun s -> options.outputName <- s), "Set the output filename (default is shader_code.h)"
          "-v", ArgType.Unit (fun() -> options.verbose<-true), "Verbose, display additional information"
          "--hlsl", ArgType.Unit (fun() -> options.hlsl<-true), "Use HLSL (default is GLSL)"
@@ -79,11 +82,9 @@ let parse () =
 
     if options.filenames.Count = 0 then
         printHeader()
-        ArgParser.Usage(specs, usage="Please give the shader files to compress on the command line.")
-        false
-    elif options.filenames.Count > 1 && not options.preserveExternals then
+        ArgParser.Usage(specs, usage = "Please give the shader files to compress on the command line.")
+        myExit 1
+    if options.filenames.Count > 1 && not options.preserveExternals then
         printfn "When compressing multiple files, you must use the --preserve-externals option."
-        false
-    else
-        if options.verbose then printHeader()
-        true
+        myExit 1
+    if options.verbose then printHeader()

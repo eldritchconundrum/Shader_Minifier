@@ -6,28 +6,26 @@ open Options.Globals
 
 module private PrinterImpl =
 
-    let mutable targetOutput = Options.Text
+    let private out a = sprintf a
 
-    let out a = sprintf a
-
-    let precedenceList = [
-        [","]
-        ["="; "+="; "-="; "*="; "/="; "%="; "<<="; ">>="; "&="; "^="; "|="] // precedence = 1
-        ["?:"]
-        ["||"]
-        ["^^"]
-        ["&&"]
-        ["|"]
-        ["^"]
-        ["&"]
-        ["=="; "!="]
-        ["<"; ">"; "<="; ">="]
-        ["<<"; ">>"]
-        ["+"; "-"]
-        ["*"; "/"; "%"]
-        // _++ is prefix and $++ is postfix
-        ["_++"; "_--"; "_+"; "_-"; "_~"; "_!"; "$++"; "$--"]
-        ["."]
+    let private precedenceList = [
+      [","]
+      ["="; "+="; "-="; "*="; "/="; "%="; "<<="; ">>="; "&="; "^="; "|="] // precedence = 1
+      ["?:"]
+      ["||"]
+      ["^^"]
+      ["&&"]
+      ["|"]
+      ["^"]
+      ["&"]
+      ["=="; "!="]
+      ["<"; ">"; "<="; ">="]
+      ["<<"; ">>"]
+      ["+"; "-"]
+      ["*"; "/"; "%"]
+      // _++ is prefix and $++ is postfix
+      ["_++"; "_--"; "_+"; "_-"; "_~"; "_!"; "$++"; "$--"]
+      ["."]
     ]
 
     let precedence =
@@ -103,7 +101,7 @@ module private PrinterImpl =
 
     let sp2 (s: string) (s2: string) =
         if s.Length > 0 && System.Char.IsLetterOrDigit(s.[s.Length-1]) &&
-            s2.Length > 0 && System.Char.IsLetterOrDigit(s2.[0]) then s + " " + s2
+           s2.Length > 0 && System.Char.IsLetterOrDigit(s2.[0]) then s + " " + s2
         else s + s2
 
     let backslashN() =
@@ -177,8 +175,8 @@ module private PrinterImpl =
         | Expr e -> out "%s;" (exprToS e)
         | If(cond, th, el) ->
             let el = match el with
-                     | None -> ""
-                     | Some el -> out "%s%s%s%s" (nl indent) "else" (nl (indent+1)) (instrToS' (indent+1) el |> sp)
+                        | None -> ""
+                        | Some el -> out "%s%s%s%s" (nl indent) "else" (nl (indent+1)) (instrToS' (indent+1) el |> sp)
             out "if(%s)%s%s" (exprToS cond) (instrToSInd indent th) el
         | ForD(init, cond, inc, body) ->
             let cond = exprToSOpt "" cond
@@ -235,18 +233,14 @@ module private PrinterImpl =
 
         tl |> List.map f |> String.concat ""
 
-let print tl = 
-    PrinterImpl.targetOutput <- options.targetOutput
-    PrinterImpl.print tl
+    let quickPrint tl =
+        let out = options.targetOutput
+        options.targetOutput <- Options.Text
+        let str = print tl
+        options.targetOutput <- out
+        str
 
-let printText tl =
-    PrinterImpl.targetOutput <- Options.Text
-    PrinterImpl.print tl
-   
-let exprToS x =
-    PrinterImpl.targetOutput <- Options.Text
-    PrinterImpl.exprToS x
-
-let typeToS ty =
-    PrinterImpl.targetOutput <- Options.Text
-    PrinterImpl.typeToS ty
+let quickPrint = PrinterImpl.quickPrint
+let print = PrinterImpl.print
+let exprToS = PrinterImpl.exprToS
+let typeToS = PrinterImpl.typeToS
