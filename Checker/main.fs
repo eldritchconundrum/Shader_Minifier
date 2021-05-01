@@ -1,6 +1,7 @@
 ﻿open OpenTK.Graphics.OpenGL
 open System
 open System.IO
+open System.Linq
 
 let initOpenTK () =
     // OpenTK requires a GameWindow
@@ -25,9 +26,7 @@ let doMinify content =
 
 let check (file: string) =
     try
-        let content =
-            use file = new StreamReader(file)
-            file.ReadToEnd()
+        let content = (new StreamReader(file)).ReadToEnd()
         if not (testCompile content) then
             printfn "Invalid input file '%s'" file
             false
@@ -49,14 +48,14 @@ let main argv =
     initOpenTK()
     let mutable failures = 0
     let inputs = Directory.GetFiles("tests/unit", "*.frag")
+    //let inputs = Directory.GetFiles("tests/", "*.frag", SearchOption.AllDirectories)
+    //let inputs = inputs.Concat(Directory.GetFiles("tests/", "*.glsl", SearchOption.AllDirectories)).ToArray()
     for f in inputs do
         if not (check f) then
             failures <- failures + 1
     if failures = 0 then
         printfn "All good."
-        // System.Console.ReadLine() |> ignore
         0
     else
         printfn "%d failures." failures
-        // System.Console.ReadLine() |> ignore
         1
