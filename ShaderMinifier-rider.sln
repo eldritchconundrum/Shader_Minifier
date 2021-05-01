@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "ShaderMinifier-rider", "ShaderMinifier-rider.fsproj", "{10B8B191-10EC-4071-8219-8224C767F0C9}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Checker-rider", "Checker\Checker-rider.fsproj", "{7B0E38E4-5267-4143-B606-CB1366BDD85C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{10B8B191-10EC-4071-8219-8224C767F0C9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{10B8B191-10EC-4071-8219-8224C767F0C9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{10B8B191-10EC-4071-8219-8224C767F0C9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{10B8B191-10EC-4071-8219-8224C767F0C9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7B0E38E4-5267-4143-B606-CB1366BDD85C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7B0E38E4-5267-4143-B606-CB1366BDD85C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7B0E38E4-5267-4143-B606-CB1366BDD85C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7B0E38E4-5267-4143-B606-CB1366BDD85C}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

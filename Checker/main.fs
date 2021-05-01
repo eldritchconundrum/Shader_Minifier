@@ -25,9 +25,7 @@ let doMinify content =
 
 let check (file: string) =
     try
-        let content =
-            use file = new StreamReader(file)
-            file.ReadToEnd()
+        let content = (new StreamReader(file)).ReadToEnd()
         if not (testCompile content) then
             printfn "Invalid input file '%s'" file
             false
@@ -44,19 +42,26 @@ let check (file: string) =
         printfn "%A" e
         false
 
+let inputs = List.map (fun (s: String) -> (@"..\..\..\..\" + s).Replace("\\","/")) [
+    @"tests\unit\blocks.frag"
+    @"tests\unit\hexa.frag"
+    @"tests\unit\inline.frag"
+    @"tests\unit\keyword_prefix.frag"
+    @"tests\unit\commas.frag"
+    @"tests\unit\numbers.frag"
+    @"tests\unit\array.frag"
+]
+
 [<EntryPoint>]
 let main argv =
     initOpenTK()
     let mutable failures = 0
-    let inputs = Directory.GetFiles("tests/unit", "*.frag")
     for f in inputs do
         if not (check f) then
             failures <- failures + 1
     if failures = 0 then
         printfn "All good."
-        // System.Console.ReadLine() |> ignore
         0
     else
         printfn "%d failures." failures
-        // System.Console.ReadLine() |> ignore
         1

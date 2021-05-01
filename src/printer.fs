@@ -4,32 +4,32 @@ open System
 open Ast
 open Options.Globals
 
-let out a = sprintf a
-
 // how to print variable names
 type PrintMode = FromTable | SingleChar | Nothing
 let mutable printMode = Nothing
 
 module private PrinterImpl =
 
-    let precedenceList = [
-        [","]
-        ["="; "+="; "-="; "*="; "/="; "%="; "<<="; ">>="; "&="; "^="; "|="] // precedence = 1
-        ["?:"]
-        ["||"]
-        ["^^"]
-        ["&&"]
-        ["|"]
-        ["^"]
-        ["&"]
-        ["=="; "!="]
-        ["<"; ">"; "<="; ">="]
-        ["<<"; ">>"]
-        ["+"; "-"]
-        ["*"; "/"; "%"]
-        // _++ is prefix and $++ is postfix
-        ["_++"; "_--"; "_+"; "_-"; "_~"; "_!"; "$++"; "$--"]
-        ["."]
+    let private out a = sprintf a
+
+    let private precedenceList = [
+      [","]
+      ["="; "+="; "-="; "*="; "/="; "%="; "<<="; ">>="; "&="; "^="; "|="] // precedence = 1
+      ["?:"]
+      ["||"]
+      ["^^"]
+      ["&&"]
+      ["|"]
+      ["^"]
+      ["&"]
+      ["=="; "!="]
+      ["<"; ">"; "<="; ">="]
+      ["<<"; ">>"]
+      ["+"; "-"]
+      ["*"; "/"; "%"]
+      // _++ is prefix and $++ is postfix
+      ["_++"; "_--"; "_+"; "_-"; "_~"; "_!"; "$++"; "$--"]
+      ["."]
     ]
 
     let precedence =
@@ -75,7 +75,9 @@ module private PrinterImpl =
                 let res = out "%s?%s:%s" (exprToSLevel prec a1) (exprToSLevel prec a2) (exprToSLevel prec a3)
                 if prec < level then out "(%s)" res else res
             | Var op, _ when System.Char.IsLetter op.[0] -> out "%s(%s)" (idToS op) (listToS exprToS "," args)
-            | Var op, _ when op.[0] = '0' -> out "%s(%s)" (idToS op) (listToS exprToS "," args)
+            // digit when renamed by RenameMode Unambiguous
+            | Var op, _ when System.Char.IsDigit op.[0] -> out "%s(%s)" (idToS op) (listToS exprToS "," args)
+            // _++ is prefix and $++ is postfix
             | Var op, [a1] when op.[0] = '$' -> out "%s%s" (exprToSLevel precedence.[op] a1) op.[1..]
             | Var op, [a1] -> out "%s%s" op (exprToSLevel precedence.["_" + op] a1)
             | Var op, [a1; a2] ->
@@ -105,7 +107,7 @@ module private PrinterImpl =
 
     let sp2 (s: string) (s2: string) =
         if s.Length > 0 && System.Char.IsLetterOrDigit(s.[s.Length-1]) &&
-            s2.Length > 0 && System.Char.IsLetterOrDigit(s2.[0]) then s + " " + s2
+           s2.Length > 0 && System.Char.IsLetterOrDigit(s2.[0]) then s + " " + s2
         else s + s2
 
     let backslashN() =
@@ -179,8 +181,8 @@ module private PrinterImpl =
         | Expr e -> out "%s;" (exprToS e)
         | If(cond, th, el) ->
             let el = match el with
-                     | None -> ""
-                     | Some el -> out "%s%s%s%s" (nl indent) "else" (nl (indent+1)) (instrToS' (indent+1) el |> sp)
+                        | None -> ""
+                        | Some el -> out "%s%s%s%s" (nl indent) "else" (nl (indent+1)) (instrToS' (indent+1) el |> sp)
             out "if(%s)%s%s" (exprToS cond) (instrToSInd indent th) el
         | ForD(init, cond, inc, body) ->
             let cond = exprToSOpt "" cond
@@ -230,9 +232,9 @@ module private PrinterImpl =
         ignoreFirstNewLine <- true
         let f x =
             let isMacro = match x with TLVerbatim s -> s <> "" && s.[0] = '#' | _ -> false
-            let needEndline = isMacro && not wasMacro
+            let needEndLine = isMacro && not wasMacro
             wasMacro <- isMacro
-            if needEndline then out "%s%s" (backslashN()) (topLevelToS x)
+            if needEndLine then out "%s%s" (backslashN()) (topLevelToS x)
             else topLevelToS x
 
         tl |> List.map f |> String.concat ""
@@ -245,6 +247,6 @@ module private PrinterImpl =
         str
 
 let quickPrint = PrinterImpl.quickPrint
-let print tl = PrinterImpl.print tl
+let print = PrinterImpl.print
 let exprToS = PrinterImpl.exprToS
 let typeToS = PrinterImpl.typeToS
