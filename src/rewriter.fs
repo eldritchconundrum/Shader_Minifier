@@ -16,10 +16,10 @@ let renameField field =
         | 'a' | 'w' | 'q' -> options.canonicalFieldNames.[3]
         | c -> failwithf "Internal error: transform('%c')" c
     if Seq.forall (fun c -> Seq.exists ((=) c) "rgba") field ||
-        Seq.forall (fun c -> Seq.exists ((=) c) "xyzw") field ||
-        Seq.forall (fun c -> Seq.exists ((=) c) "stpq") field
+       Seq.forall (fun c -> Seq.exists ((=) c) "xyzw") field ||
+       Seq.forall (fun c -> Seq.exists ((=) c) "stpq") field
     then
-        field |> String.map transform
+      field |> String.map transform
     else field
 
 // Remove useless spaces in macros
@@ -31,7 +31,7 @@ let private stripSpaces str =
         last <- c
         result.Append(c) |> ignore
     let isId c = Char.IsLetterOrDigit c || c = '_' || c = '('
-    // hack because we can't remove space in "#define foo (1+1)"
+       // hack because we can't remove space in "#define foo (1+1)"
 
     let mutable space = false
     let mutable macro = false
@@ -124,10 +124,10 @@ let rec private expr env = function
     // iq's smoothstep trick: http://www.pouet.net/topic.php?which=6751&page=1#c295695
     | FunCall(Var "smoothstep", [Float (0.,_); Float (1.,_); _]) as e -> e
     | FunCall(Var "smoothstep", [a; b; x]) when options.smoothstepTrick ->
-        let sub1 = FunCall(Var "-", [x; a])
-        let sub2 = FunCall(Var "-", [b; a])
-        let div  = FunCall(Var "/", [sub1; sub2]) |> mapExpr env
-        FunCall(Var "smoothstep",  [Float (0.,""); Float (1.,""); div])
+      let sub1 = FunCall(Var "-", [x; a])
+      let sub2 = FunCall(Var "-", [b; a])
+      let div  = FunCall(Var "/", [sub1; sub2]) |> mapExpr env
+      FunCall(Var "smoothstep",  [Float (0.,""); Float (1.,""); div])
 
     | Dot(e, field) when options.canonicalFieldNames <> "" -> Dot(e, renameField field)
 
@@ -179,10 +179,10 @@ let instr = function
         if not options.noSequence && canOptimize then
             let li = List.choose (function Expr e -> Some e | _ -> None) b
             match returnExp with
-            | None ->
+             | None ->
                 if li = [] then Block []
                 else Expr (List.reduce (fun acc x -> FunCall(Var ",", [acc;x])) li)
-            | Some e ->
+             | Some e ->
                let expr = List.reduce (fun acc x -> FunCall(Var ",", [acc;x])) (li@[e])
                Keyword("return", Some expr)
         else
@@ -209,9 +209,9 @@ let apply li =
     |> reorderTopLevel
     |> mapTopLevel (mapEnv expr instr)
     |> List.map (function
-        | TLDecl (ty, li) -> TLDecl (rwType ty, declsNotToInline li)
-        | TLVerbatim s -> TLVerbatim (stripSpaces s)
-        | e -> e
+          | TLDecl (ty, li) -> TLDecl (rwType ty, declsNotToInline li)
+          | TLVerbatim s -> TLVerbatim (stripSpaces s)
+          | e -> e
     )
     |> squeezeTLDeclarations
 
@@ -265,8 +265,7 @@ let private computeAllDependencies code =
 // reorder functions if there were forward declarations
 let reorder code =
     if options.reorderFunctions then
-        if options.verbose then
-            printfn "Reordering functions because of forward declarations."
+        vprintfn "Reordering functions because of forward declarations."
         let order = code |> computeAllDependencies |> graphReorder
         let rest = code |> List.filter (function Function _ -> false | _ -> true)
         rest @ order
