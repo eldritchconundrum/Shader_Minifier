@@ -4,7 +4,7 @@ open System.Collections.Generic
 open Ast
 open Options.Globals
 
-type RenameMode = Unambiguous | Frequency | Context
+type RenameMode = Unambiguous | Frequency | Context // Frequency is unused..? Unambiguous should be renamed "NoLetters"?
 
 let mutable private renameMode = Unambiguous
 
@@ -76,14 +76,14 @@ let chooseIdent ident candidates =
 
     // update table
     for c in allChars do
-      match contextTable.TryFind (c, ident), contextTable.TryFind (c, bestC) with
-      | None, _ -> ()
-      | Some n1, None -> contextTable.[(c, bestC)] <- n1
-      | Some n1, Some n2 -> contextTable.[(c, bestC)] <- n1 + n2
-      match contextTable.TryFind (ident, c), contextTable.TryFind (bestC, c) with
-      | None, _ -> ()
-      | Some n1, None -> contextTable.[(bestC, c)] <- n1
-      | Some n1, Some n2 -> contextTable.[(bestC, c)] <- n1 + n2
+        match contextTable.TryFind (c, ident), contextTable.TryFind (c, bestC) with
+        | None, _ -> ()
+        | Some n1, None -> contextTable.[(c, bestC)] <- n1
+        | Some n1, Some n2 -> contextTable.[(c, bestC)] <- n1 + n2
+        match contextTable.TryFind (ident, c), contextTable.TryFind (bestC, c) with
+        | None, _ -> ()
+        | Some n1, None -> contextTable.[(bestC, c)] <- n1
+        | Some n1, Some n2 -> contextTable.[(bestC, c)] <- n1 + n2
 
     bestS
 
@@ -99,9 +99,9 @@ type Env = {
     reusable: Ident list
 }
 
-let mutable numberOfUsedIdents = 0
+let mutable numberOfUsedIdents = 0 // FIXME pourquoi une globale ? c'est à reset quand, dans renameTopLevel ? ça devrait être dans env ?
 
-let alwaysNewName env id =
+let alwaysNewName env id = // useful to find letter frequencies of non-identifiers
     numberOfUsedIdents <- numberOfUsedIdents + 1
     let newName = sprintf "%04d" numberOfUsedIdents
     let env = {env with map = Map.add id newName env.map; max = env.max + 1}
@@ -186,7 +186,7 @@ let renDecl isTopLevel env (ty:Type, vars) : Env * Decl =
                     {env with reusable = List.filter ((<>)decl.name) env.reusable}, decl.name
                 else
                     let env, newName = newId env decl.name
-                    CGen.export "" decl.name newName // TODO: first argument seems now useless
+                    CGen.export "" decl.name newName // FIXME: first argument seems now useless
                     env, newName
             else
                 newId env decl.name
@@ -197,8 +197,7 @@ let renDecl isTopLevel env (ty:Type, vars) : Env * Decl =
     let env, res = renList env aux vars
     env, (ty, res)
 
-// "Garbage collection": remove names that are not used in the block
-// so that we can reuse them.
+// "Garbage collection": remove names that are not used in the block so that we can reuse them.
 let garbage (env: Env) block =
     let d = HashSet()
     let collect mEnv = function
@@ -251,9 +250,6 @@ let rec renInstr env =
     | Keyword(k, e) -> env, Keyword(k, renOpt e)
     | Verbatim _ as v -> env, v
 
-let mutable private forbiddenNames = [ "if"; "in"; "do" ]
-let addForbiddenName(s: string) = forbiddenNames <- s :: forbiddenNames
-
 let rec renTopLevelName env = function
     | TLDecl d ->
         let env, res = renDecl true env d
@@ -280,11 +276,14 @@ let rec doNotOverload env = function
         let env = {env with map = Map.add name name env.map; reusable = re}
         doNotOverload env li
 
+let mutable private forbiddenNames = [ "if"; "in"; "do" ]
+let addForbiddenName(s: string) = forbiddenNames <- s :: forbiddenNames
+
 let rec renameTopLevel li mode (identTable: string[]) =
     renameMode <- mode
     let idents = identTable |> Array.toList
-              |> List.filter (fun x -> x.Length = 1)
-              |> List.filter (fun x -> not <| List.exists ((=) x) forbiddenNames)
+                 |> List.filter (fun x -> x.Length = 1) // FIXME: support 2-letter identifiers (see optimizeContext/chooseIdent)
+                 |> List.filter (fun x -> not <| List.exists ((=) x) forbiddenNames)
     // Rename top-level values first
     let env = {map = Map.empty ; max = 0 ; fct = Map.empty ; reusable = idents}
     let env = doNotOverload env doNotOverloadList

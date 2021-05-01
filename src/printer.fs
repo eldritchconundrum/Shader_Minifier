@@ -7,10 +7,10 @@ open Options.Globals
 module private PrinterImpl =
 
     let mutable targetOutput = Options.Text
+    
+    let private out a = sprintf a
 
-    let out a = sprintf a
-
-    let precedenceList = [
+    let private precedenceList = [
         [","]
         ["="; "+="; "-="; "*="; "/="; "%="; "<<="; ">>="; "&="; "^="; "|="] // precedence = 1
         ["?:"]
@@ -177,8 +177,8 @@ module private PrinterImpl =
         | Expr e -> out "%s;" (exprToS e)
         | If(cond, th, el) ->
             let el = match el with
-                     | None -> ""
-                     | Some el -> out "%s%s%s%s" (nl indent) "else" (nl (indent+1)) (instrToS' (indent+1) el |> sp)
+                        | None -> ""
+                        | Some el -> out "%s%s%s%s" (nl indent) "else" (nl (indent+1)) (instrToS' (indent+1) el |> sp)
             out "if(%s)%s%s" (exprToS cond) (instrToSInd indent th) el
         | ForD(init, cond, inc, body) ->
             let cond = exprToSOpt "" cond
@@ -242,7 +242,7 @@ let print tl =
 let printText tl =
     PrinterImpl.targetOutput <- Options.Text
     PrinterImpl.print tl
-   
+
 let exprToS x =
     PrinterImpl.targetOutput <- Options.Text
     PrinterImpl.exprToS x

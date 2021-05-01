@@ -11,18 +11,14 @@ let mutable private exportedValues = ([] : (string * string * string) list)
 let export ty name (newName:string) =
     if newName.[0] <> '0' then
         exportedValues <- exportedValues |> List.map (fun (ty2, name2, newName2 as arg) ->
-            if ty = ty2 && name = newName2 then ty, name2, newName
+            if ty = ty2 && name = newName2
+            then ty, name2, newName
             else arg
         )
     else
         exportedValues <- (ty, name, newName) :: exportedValues
 
-let private output() =
-    if Options.debugMode || options.outputName = "" || options.outputName = "-" then stdout
-    else new StreamWriter(options.outputName) :> TextWriter
-
-let private printHeader data asAList =
-    use out = output()
+let private printHeader out data asAList =
     let fileName =
         if options.outputName = "" || options.outputName = "-" then "shader_code.h"
         else Path.GetFileName options.outputName
@@ -55,13 +51,11 @@ let private printHeader data asAList =
 
     if not asAList then fprintfn out "#endif // %s" macroName
 
-let private printNoHeader data =
-    use out = output()
+let private printNoHeader out data =
     let str = [for _, code in data -> Printer.print code] |> String.concat "\n"
     fprintf out "%s" str
 
-let private printJSHeader data =
-    use out = output()
+let private printJSHeader out data =
 
     fprintfn out "/* File generated with Shader Minifier %s" Options.version
     fprintfn out " * http://www.ctrl-alt-test.fr"
@@ -79,8 +73,7 @@ let private printJSHeader data =
         fprintfn out "var %s =%s \"%s\"" name Environment.NewLine (Printer.print code)
         fprintfn out ""
 
-let private printNasmHeader data =
-    use out = output()
+let private printNasmHeader out data =
 
     fprintfn out "; File generated with Shader Minifier %s" Options.version
     fprintfn out "; http://www.ctrl-alt-test.fr"
@@ -97,9 +90,9 @@ let private printNasmHeader data =
         fprintfn out "_%s:%s\tdb '%s', 0" name Environment.NewLine (Printer.print code)
         fprintfn out ""
 
-let print data = function
-    | Options.Text -> printNoHeader data
-    | Options.CHeader -> printHeader data false
-    | Options.CList -> printHeader data true
-    | Options.JS -> printJSHeader data
-    | Options.Nasm -> printNasmHeader data
+let print out data = function
+    | Options.Text -> printNoHeader out data
+    | Options.CHeader -> printHeader out data false
+    | Options.CList -> printHeader out data true
+    | Options.JS -> printJSHeader out data
+    | Options.Nasm -> printNasmHeader out data

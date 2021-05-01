@@ -1,0 +1,56 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net5.0</TargetFramework>
+	<GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
+	<RootNamespace>ConsoleApp1</RootNamespace>
+    </PropertyGroup>
+
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <Tailcalls>false</Tailcalls>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <WarningLevel>5</WarningLevel>
+    <OtherFlags>--warnon:1182</OtherFlags>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>portable</DebugType>
+    <Optimize>true</Optimize>
+    <Tailcalls>true</Tailcalls>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <WarningLevel>3</WarningLevel>
+  </PropertyGroup>
+
+    <ItemGroup>
+     <Compile Include="options.fs" />
+     <Compile Include="ast.fs" />
+     <Compile Include="printer.fs" />
+     <Compile Include="cGen.fs" />
+     <Compile Include="renamer.fs" />
+     <Compile Include="rewriter.fs" />
+     <Compile Include="parse.fs" />
+     <Compile Include="tests.fs" />
+     <Compile Include="main.fs" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Reference Include="Argu, Version=5.5.0.0, Culture=neutral, PublicKeyToken=null">
+        <HintPath>..\lib\Argu.dll</HintPath>
+      </Reference>
+      <Reference Include="FParsec, Version=0.9.0.0, Culture=neutral, PublicKeyToken=null">
+        <HintPath>..\lib\FParsec.dll</HintPath>
+      </Reference>
+      <Reference Include="FParsecCS, Version=0.9.0.0, Culture=neutral, PublicKeyToken=null">
+        <HintPath>..\lib\FParsecCS.dll</HintPath>
+      </Reference>
+      <Reference Include="FSharp.PowerPack, Version=2.0.0.0, Culture=neutral, PublicKeyToken=a19089b1c74d0809">
+        <HintPath>..\lib\FSharp.PowerPack.dll</HintPath>
+      </Reference>
+    </ItemGroup>
+
+</Project>
