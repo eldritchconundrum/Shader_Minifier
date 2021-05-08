@@ -59,8 +59,8 @@ let main argv =
                     if Options.debugMode || options.outputName = "" || options.outputName = "-" then stdout
                     else new StreamWriter(options.outputName) :> TextWriter
                 // first minify every file, then print minified files
-                let codes = Array.map minifyFile options.filenames
-                CGen.print out (Array.zip options.filenames codes) options.targetOutput
+                let filenamesAndMinifiedCodes = Array.map (fun f -> (f, Printer.print (minifyFile f))) options.filenames
+                Formatter.format out filenamesAndMinifiedCodes options.outputFormat
                 0
             else 1
         with

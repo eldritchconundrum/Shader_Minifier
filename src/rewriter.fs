@@ -198,15 +198,12 @@ let instr = function
     | e -> e
 
 let reorderTopLevel t =
-    if options.reorderDeclarations then
-        let externals, functions = List.partition (function TLDecl _ -> true | _ -> false) t
-        List.sort externals @ functions
-    else
-        t
+    let externals, functions = List.partition (function TLDecl _ -> true | _ -> false) t
+    List.sort externals @ functions
 
 let apply li = // simplify the ast
     li
-    |> reorderTopLevel
+    |> if options.reorderDeclarations then reorderTopLevel else id
     |> mapTopLevel (mapEnv expr instr)
     |> List.map (function
         | TLDecl (ty, li) -> TLDecl (rwType ty, declsNotToInline li)
@@ -230,12 +227,10 @@ let rec findRemove callback = function
 let private graphReorder deps =
     let mutable list = []
     let mutable lastName = ""
-
     let rec loop deps =
         let deps = findRemove (fun s x -> lastName <- s; list <- x :: list) deps
         let deps = deps |> List.map (fun (n, d, c) -> n, List.filter ((<>) lastName) d, c)
         if deps <> [] then loop deps
-
     loop deps
     list |> List.rev
 

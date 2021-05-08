@@ -1,4 +1,4 @@
-﻿module CGen
+﻿module Formatter
 
 open System
 open System.IO
@@ -18,14 +18,17 @@ let export ty name (newName:string) =
     else
         exportedValues <- (ty, name, newName) :: exportedValues
 
-let private printHeader out data asAList =
+let private header = sprintf "File generated with Shader Minifier %s" Options.version
+let private url = "http://www.ctrl-alt-test.fr"
+
+let private formatC out data asAList =
     let fileName =
         if options.outputName = "" || options.outputName = "-" then "shader_code.h"
         else Path.GetFileName options.outputName
     let macroName = fileName.Replace(".", "_").ToUpper() + "_"
 
-    fprintfn out "/* File generated with Shader Minifier %s" Options.version
-    fprintfn out " * http://www.ctrl-alt-test.fr"
+    fprintfn out "/* %s" header
+    fprintfn out " * %s" url
     fprintfn out " */"
 
     if not asAList then
@@ -44,20 +47,20 @@ let private printHeader out data asAList =
         let name = (Path.GetFileName file).Replace(".", "_")
         if asAList then
             fprintfn out "// %s" file
-            fprintfn out "\"%s\"," (Printer.print code)
+            fprintfn out "\"%s\"," code
         else
-            fprintfn out "const char *%s =%s \"%s\";" name Environment.NewLine (Printer.print code)
+            fprintfn out "const char *%s =%s \"%s\";" name Environment.NewLine code
         fprintfn out ""
 
     if not asAList then fprintfn out "#endif // %s" macroName
 
-let private printNoHeader out data =
-    let str = [for _, code in data -> Printer.print code] |> String.concat "\n"
+let private formatRaw out data =
+    let str = [for _, code in data -> code] |> String.concat "\n"
     fprintf out "%s" str
 
-let private printJSHeader out data =
-    fprintfn out "/* File generated with Shader Minifier %s" Options.version
-    fprintfn out " * http://www.ctrl-alt-test.fr"
+let private formatJS out data =
+    fprintfn out "/* %s" header
+    fprintfn out " * %s" url
     fprintfn out " */"
 
     for ty, name, newName in List.sort exportedValues do
@@ -69,12 +72,12 @@ let private printJSHeader out data =
     fprintfn out ""
     for file : string, code in data do
         let name = (Path.GetFileName file).Replace(".", "_")
-        fprintfn out "var %s =%s \"%s\"" name Environment.NewLine (Printer.print code)
+        fprintfn out "var %s =%s \"%s\"" name Environment.NewLine code
         fprintfn out ""
 
-let private printNasmHeader out data =
-    fprintfn out "; File generated with Shader Minifier %s" Options.version
-    fprintfn out "; http://www.ctrl-alt-test.fr"
+let private formatNasm out data =
+    fprintfn out "; %s" header
+    fprintfn out "; %s" url
 
     for ty, name, newName in List.sort exportedValues do
         if ty = "" then
@@ -85,12 +88,12 @@ let private printNasmHeader out data =
     fprintfn out ""
     for file : string, code in data do
         let name = (Path.GetFileName file).Replace(".", "_")
-        fprintfn out "_%s:%s\tdb '%s', 0" name Environment.NewLine (Printer.print code)
+        fprintfn out "_%s:%s\tdb '%s', 0" name Environment.NewLine code
         fprintfn out ""
 
-let print out data = function
-    | Options.Text -> printNoHeader out data
-    | Options.CHeader -> printHeader out data false
-    | Options.CList -> printHeader out data true
-    | Options.JS -> printJSHeader out data
-    | Options.Nasm -> printNasmHeader out data
+let format out filenamesAndMinifiedPairs = function
+    | Options.Text -> formatRaw out filenamesAndMinifiedPairs
+    | Options.CHeader -> formatC out filenamesAndMinifiedPairs false
+    | Options.CList -> formatC out filenamesAndMinifiedPairs true
+    | Options.JS -> formatJS out filenamesAndMinifiedPairs
+    | Options.Nasm -> formatNasm out filenamesAndMinifiedPairs

@@ -32,15 +32,15 @@ and DeclElt = {
 
 and Decl = Type * DeclElt list
 
-and Instr =
-    | Block of Instr list
+and Stmt = // Statement
+    | Block of Stmt list
     | Decl of Decl
     | Expr of Expr
-    | If of Expr * Instr (*then*) * Instr option (*else*)
-    | ForD of Decl * Expr option * Expr option * Instr (*for loop starting with a declaration*)
-    | ForE of Expr option * Expr option * Expr option * Instr (*for loop starting with an expression*)
-    | While of Expr * Instr
-    | DoWhile of Expr * Instr
+    | If of Expr * Stmt (*then*) * Stmt option (*else*)
+    | ForD of Decl * Expr option * Expr option * Stmt (*for loop starting with a declaration*)
+    | ForE of Expr option * Expr option * Expr option * Stmt (*for loop starting with an expression*)
+    | While of Expr * Stmt
+    | DoWhile of Expr * Stmt
     | Keyword of string * Expr option (*break, continue, return, discard*)
     | Verbatim of string
 
@@ -53,7 +53,7 @@ and FunctionType = {
 
 and TopLevel =
     | TLVerbatim of string
-    | Function of FunctionType * Instr
+    | Function of FunctionType * Stmt
     | TLDecl of Decl
     | TypeDecl of TypeSpec // structs
 
@@ -63,9 +63,9 @@ let makeFunctionType ty name args sem =
     {retType=ty; fName=name; args=args; semantics=sem}
 
 [<NoComparison; NoEquality>]
-type MapEnv = {
+type MapEnv = { // operations to apply during a visit of the AST, and result of the visit
     fExpr: MapEnv -> Expr -> Expr
-    fInstr: Instr -> Instr
+    fInstr: Stmt -> Stmt
     vars: Map<Ident, Type * Expr option * Expr option >
 }
 
