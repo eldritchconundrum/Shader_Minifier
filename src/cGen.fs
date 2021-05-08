@@ -67,7 +67,7 @@ let private formatJS out data =
         if ty = "" then
             fprintfn out "var var_%s = \"%s\"" (name.ToUpper()) newName
         else
-            fprintfn out "var %c_%s = \"%s\"" (System.Char.ToUpper ty.[0]) (name.ToUpper()) newName
+            fprintfn out "var %c_%s = \"%s\"" (Char.ToUpper ty.[0]) (name.ToUpper()) newName
 
     fprintfn out ""
     for file : string, code in data do
@@ -83,7 +83,7 @@ let private formatNasm out data =
         if ty = "" then
             fprintfn out "_var_%s: db '%s', 0" (name.ToUpper()) newName
         else
-            fprintfn out "_%c_%s: db '%s', 0" (System.Char.ToUpper ty.[0]) (name.ToUpper()) newName
+            fprintfn out "_%c_%s: db '%s', 0" (Char.ToUpper ty.[0]) (name.ToUpper()) newName
 
     fprintfn out ""
     for file : string, code in data do

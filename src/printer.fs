@@ -235,6 +235,8 @@ module private PrinterImpl =
 
         tl |> List.map f |> String.concat ""
 
+//FIXME: use of globals during the print process (there's no reentrancy right now, but it's ugly to depend on it)
+
 let print tl = 
     PrinterImpl.outputFormat <- options.outputFormat
     PrinterImpl.print tl

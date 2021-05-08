@@ -59,37 +59,37 @@ let private stripSpaces str =
 let private hasInlinePrefix (s:string) = s.StartsWith("i_")
 let private declsNotToInline d = d |> List.filter (fun x -> not (hasInlinePrefix x.name))
 
-let private bool = function
+let private simplifyBool = function
     | true -> Var "true" // Int (1, "")
     | false -> Var "false" // Int (0, "")
 
-let rec private expr env = function
+let rec private simplifyExpr env = function
     | FunCall(Var "-", [Int (i1, su)]) -> Int (-i1, su)
     | FunCall(Var "-", [FunCall(Var "-", [e])]) -> e
     | FunCall(Var "+", [e]) -> e
 
     | FunCall(Var ",", [e1; FunCall(Var ",", [e2; e3])]) ->
-        FunCall(Var ",", [expr env (FunCall(Var ",", [e1; e2])); e3])
+        FunCall(Var ",", [simplifyExpr env (FunCall(Var ",", [e1; e2])); e3])
 
     | FunCall(Var "-", [x; Float (f, s)]) when f < 0. ->
-        FunCall(Var "+", [x; Float (-f, s)]) |> expr env
+        FunCall(Var "+", [x; Float (-f, s)]) |> simplifyExpr env
     | FunCall(Var "-", [x; Int (i, s)]) when i < 0 ->
-        FunCall(Var "+", [x; Int (-i, s)]) |> expr env
+        FunCall(Var "+", [x; Int (-i, s)]) |> simplifyExpr env
 
     // Boolean simplifications (let's ignore the suffix)
-    | FunCall(Var "<",  [Int (i1, _); Int (i2, _)]) -> bool(i1 < i2)
-    | FunCall(Var ">",  [Int (i1, _); Int (i2, _)]) -> bool(i1 > i2)
-    | FunCall(Var "<=", [Int (i1, _); Int (i2, _)]) -> bool(i1 <= i2)
-    | FunCall(Var ">=", [Int (i1, _); Int (i2, _)]) -> bool(i1 <= i2)
-    | FunCall(Var "==", [Int (i1, _); Int (i2, _)]) -> bool(i1 = i2)
-    | FunCall(Var "!=", [Int (i1, _); Int (i2, _)]) -> bool(i1 <> i2)
+    | FunCall(Var "<",  [Int (i1, _); Int (i2, _)]) -> simplifyBool(i1 < i2)
+    | FunCall(Var ">",  [Int (i1, _); Int (i2, _)]) -> simplifyBool(i1 > i2)
+    | FunCall(Var "<=", [Int (i1, _); Int (i2, _)]) -> simplifyBool(i1 <= i2)
+    | FunCall(Var ">=", [Int (i1, _); Int (i2, _)]) -> simplifyBool(i1 <= i2)
+    | FunCall(Var "==", [Int (i1, _); Int (i2, _)]) -> simplifyBool(i1 = i2)
+    | FunCall(Var "!=", [Int (i1, _); Int (i2, _)]) -> simplifyBool(i1 <> i2)
 
-    | FunCall(Var "<", [Float (i1,_); Float (i2,_)]) -> bool(i1 < i2)
-    | FunCall(Var ">", [Float (i1,_); Float (i2,_)]) -> bool(i1 > i2)
-    | FunCall(Var "<=", [Float (i1,_); Float (i2,_)]) -> bool(i1 <= i2)
-    | FunCall(Var ">=", [Float (i1,_); Float (i2,_)]) -> bool(i1 <= i2)
-    | FunCall(Var "==", [Float (i1,_); Float (i2,_)]) -> bool(i1 = i2)
-    | FunCall(Var "!=", [Float (i1,_); Float (i2,_)]) -> bool(i1 <> i2)
+    | FunCall(Var "<", [Float (i1,_); Float (i2,_)]) -> simplifyBool(i1 < i2)
+    | FunCall(Var ">", [Float (i1,_); Float (i2,_)]) -> simplifyBool(i1 > i2)
+    | FunCall(Var "<=", [Float (i1,_); Float (i2,_)]) -> simplifyBool(i1 <= i2)
+    | FunCall(Var ">=", [Float (i1,_); Float (i2,_)]) -> simplifyBool(i1 <= i2)
+    | FunCall(Var "==", [Float (i1,_); Float (i2,_)]) -> simplifyBool(i1 = i2)
+    | FunCall(Var "!=", [Float (i1,_); Float (i2,_)]) -> simplifyBool(i1 <> i2)
 
     // Stupid simplifications (they can be useful to simplify rewritten code)
     | FunCall(Var "/", [e; Float (1.,_)]) -> e
@@ -124,10 +124,10 @@ let rec private expr env = function
     // iq's smoothstep trick: http://www.pouet.net/topic.php?which=6751&page=1#c295695
     | FunCall(Var "smoothstep", [Float (0.,_); Float (1.,_); _]) as e -> e
     | FunCall(Var "smoothstep", [a; b; x]) when options.smoothstepTrick ->
-      let sub1 = FunCall(Var "-", [x; a])
-      let sub2 = FunCall(Var "-", [b; a])
-      let div  = FunCall(Var "/", [sub1; sub2]) |> mapExpr env
-      FunCall(Var "smoothstep",  [Float (0.,""); Float (1.,""); div])
+        let sub1 = FunCall(Var "-", [x; a])
+        let sub2 = FunCall(Var "-", [b; a])
+        let div  = FunCall(Var "/", [sub1; sub2]) |> mapExpr env
+        FunCall(Var "smoothstep",  [Float (0.,""); Float (1.,""); div])
 
     | Dot(e, field) when options.canonicalFieldNames <> "" -> Dot(e, renameField field)
 
@@ -139,27 +139,27 @@ let rec private expr env = function
     | e -> e
 
 // Squeeze declarations: "float a=2.; float b;" => "float a=2.,b;"
-let rec squeezeDeclarations = function
+let rec private squeezeDeclarations = function
     | []-> []
     | Decl(ty1, li1) :: Decl(ty2, li2) :: l when ty1 = ty2 ->
         squeezeDeclarations (Decl(ty1, li1 @ li2) :: l)
     | e::l -> e :: squeezeDeclarations l
 
 // Squeeze top-level declarations, e.g. uniforms
-let rec squeezeTLDeclarations = function
+let rec private squeezeTLDeclarations = function
     | []-> []
     | TLDecl(ty1, li1) :: TLDecl(ty2, li2) :: l when ty1 = ty2 ->
         squeezeTLDeclarations (TLDecl(ty1, li1 @ li2) :: l)
     | e::l -> e :: squeezeTLDeclarations l
 
-let rwTypeSpec = function
+let private rwTypeSpec = function
     | TypeName n -> TypeName (stripSpaces n)
     | x -> x // structs
 
-let rwType (ty: Type) =
+let private rwType (ty: Type) = // rwTypes = rewrite types ??
     makeType (rwTypeSpec ty.name) (Option.map stripSpaces ty.typeQ)
 
-let instr = function
+let private simplifyStmt = function
     | Block [] as e -> e
     | Block b ->
         // Remove dead code after return/break/...
@@ -197,14 +197,14 @@ let instr = function
     | Verbatim s -> Verbatim (stripSpaces s)
     | e -> e
 
-let reorderTopLevel t =
+let private reorderTopLevel t =
     let externals, functions = List.partition (function TLDecl _ -> true | _ -> false) t
     List.sort externals @ functions
 
-let apply li = // simplify the ast
+let simplify li = // simplify the ast
     li
     |> if options.reorderDeclarations then reorderTopLevel else id
-    |> mapTopLevel (mapEnv expr instr)
+    |> mapTopLevel (mapEnv simplifyExpr simplifyStmt)
     |> List.map (function
         | TLDecl (ty, li) -> TLDecl (rwType ty, declsNotToInline li)
         | TLVerbatim s -> TLVerbatim (stripSpaces s)
@@ -212,57 +212,56 @@ let apply li = // simplify the ast
     )
     |> squeezeTLDeclarations
 
+
           (* Reorder functions because of forward declarations *)
 
 
-let rec findRemove callback = function
-    | (name, [], content) :: l ->
-        //printfn "=> %s" name
-        callback name content
-        l
-    | [] -> failwith "Cannot reorder functions (probably because of a recursion)."
-    | x :: l -> x :: findRemove callback l
-
-// slow, but who cares?
-let private graphReorder deps =
-    let mutable list = []
-    let mutable lastName = ""
-    let rec loop deps =
-        let deps = findRemove (fun s x -> lastName <- s; list <- x :: list) deps
-        let deps = deps |> List.map (fun (n, d, c) -> n, List.filter ((<>) lastName) d, c)
-        if deps <> [] then loop deps
-    loop deps
-    list |> List.rev
-
-
-// get the list of external values the block depends on
-let private computeDependencies block =
-    let d = HashSet()
-    let collect mEnv = function
-        | Var id as e ->
-            if not (mEnv.vars.ContainsKey(id)) then d.Add id |> ignore
-            e
-        | e -> e
-    mapInstr (mapEnv collect id) block |> ignore
-    d |> Seq.toList
-
-// This function assumes that functions are NOT overloaded
-let private computeAllDependencies code =
-    let fct = code |> List.choose (function
-        | Function(fct, block) as f -> Some (fct.fName, block, f)
-        | _ -> None)
-    let deps = fct |> List.map (fun (name, block, f) ->
-        let dep = computeDependencies block
-                  |> List.filter (fun name -> List.exists (fun (x,_,_) -> name = x) fct)
-        name, dep, f)
-    deps
-
 // reorder functions if there were forward declarations
 let reorder code =
-    if options.reorderFunctions then
-        vprintfn "Reordering functions because of forward declarations."
-        let order = code |> computeAllDependencies |> graphReorder
-        let rest = code |> List.filter (function Function _ -> false | _ -> true)
-        rest @ order
-    else
-        code
+
+    let rec findRemove callback = function
+        | (name, [], content) :: l ->
+            //printfn "=> %s" name
+            callback name content
+            l
+        | [] -> failwith "Cannot reorder functions (probably because of a recursion)."
+        | x :: l -> x :: findRemove callback l
+
+    // slow, but who cares?
+    let graphReorder deps =
+        let mutable list = []
+        let mutable lastName = ""
+        let rec loop deps =
+            let deps = findRemove (fun s x -> lastName <- s; list <- x :: list) deps
+            let deps = deps |> List.map (fun (n, d, c) -> n, List.filter ((<>) lastName) d, c)
+            if deps <> [] then loop deps
+        loop deps
+        list |> List.rev
+
+
+    // get the list of external values the block depends on
+    let computeDependencies block =
+        let d = HashSet()
+        let collect mEnv = function
+            | Var id as e ->
+                if not (mEnv.vars.ContainsKey(id)) then d.Add id |> ignore
+                e
+            | e -> e
+        mapInstr (mapEnv collect id) block |> ignore
+        d |> Seq.toList
+
+    // This function assumes that functions are NOT overloaded
+    let computeAllDependencies code =
+        let fct = code |> List.choose (function
+            | Function(fct, block) as f -> Some (fct.fName, block, f)
+            | _ -> None)
+        let deps = fct |> List.map (fun (name, block, f) ->
+            let dep = computeDependencies block
+                      |> List.filter (fun name -> List.exists (fun (x,_,_) -> name = x) fct)
+            name, dep, f)
+        deps
+
+    vprintfn "Reordering functions because of forward declarations."
+    let order = code |> computeAllDependencies |> graphReorder
+    let rest = code |> List.filter (function Function _ -> false | _ -> true)
+    rest @ order

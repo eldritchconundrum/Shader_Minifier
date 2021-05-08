@@ -32,8 +32,8 @@ let minify(streamName, (content : String)) =
     let mutable codes = Parse.runParser streamName content
     let shaderSize () = (Printer.printText codes).Length
     vprintfn "File parsed. Shader size is: %d" (shaderSize ())
-    codes <- Rewriter.reorder codes
-    codes <- Rewriter.apply codes
+    codes <- if options.reorderFunctions then Rewriter.reorder codes else codes
+    codes <- Rewriter.simplify codes
     vprintfn "Rewrite tricks applied. Shader size is: %d" (shaderSize ())
     if not options.noRenaming then
         codes <- rename codes
